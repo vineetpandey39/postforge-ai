@@ -25,7 +25,7 @@ export async function POST(request) {
           'anthropic-beta': 'web-search-2025-03-05',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-sonnet-4-6',
           max_tokens: 1000,
           tools: [{ type: 'web_search_20250305', name: 'web_search' }],
           system: `You are a real-time content researcher. Today is ${today}.
@@ -58,7 +58,7 @@ Return ONLY the raw JSON array starting with [. No markdown, no backticks.`,
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 1000,
         system: `You are a content researcher. Today is ${today}.
 Generate 6-8 current, specific content items for an Instagram page about AI income.
