@@ -289,6 +289,11 @@ export default function PostForge() {
               <div style={{ fontSize: '12px', color: '#D1D5DB', lineHeight: '1.7', marginBottom: '7px' }}>{output.caption}</div>
               <div style={{ fontSize: '12px', color: '#F59E0B', fontWeight: '600', marginBottom: '7px' }}>👉 {output.cta}</div>
               <div style={{ fontSize: '10px', color: '#4B5563', lineHeight: '1.9' }}>{output.hashtags}</div>
+              {output.hashtag_strategy && (
+                <div style={{ marginTop: '10px', padding: '8px 10px', background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.15)', borderRadius: '7px', fontSize: '10px', color: '#93C5FD', lineHeight: '1.6' }}>
+                  💡 <strong>Hashtag Strategy:</strong> {output.hashtag_strategy}
+                </div>
+              )}
             </div>
 
             {/* Canva brief */}
