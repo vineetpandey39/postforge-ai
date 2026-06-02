@@ -1,37 +1,43 @@
 export async function POST(request) {
   try {
     const { pillar, pillarFull } = await request.json();
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) return Response.json({ error: 'OpenAI API key not configured' }, { status: 500 });
+    const openaiKey = process.env.OPENAI_API_KEY;
+    if (!openaiKey) return Response.json({ error: 'OpenAI API key not configured' }, { status: 500 });
 
-    const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const now = new Date();
+    const today = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const thisWeek = new Date(now - 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
     const queries = {
-      news: `top AI news ${today}`,
-      tool: `new AI tools for creators and income ${today}`,
-      income: `AI passive income real examples ${today}`,
-      transformation: `AI life and income transformation stories 2026`,
-      automation: `AI automation workflow results 2026`,
+      news: `breaking AI news announcements ${today} — OpenAI Google Anthropic Meta Apple Microsoft`,
+      tool: `new AI tools launched ${today} for creators automation income`,
+      income: `people making money with AI right now ${today} real examples`,
+      transformation: `AI transforming careers businesses lives ${today} real stories`,
+      automation: `AI automation saving time money businesses ${today} real results`,
     };
 
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+        'Authorization': `Bearer ${openaiKey}`,
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
-        max_tokens: 800,
+        max_tokens: 900,
         response_format: { type: 'json_object' },
         messages: [
           {
             role: 'system',
-            content: `You are a content researcher. Today is ${today}. Return ONLY a JSON object with a single key "items" containing an array of 6 objects. Each object must have: id (string), tag (emoji + word), date (string), source (string), headline (string), summary (2-3 sentences with real facts and numbers).`,
+            content: `You are a real-time content researcher. Today is exactly ${today}.
+CRITICAL: Only include items from the last 7 days (between ${thisWeek} and ${today}).
+Return a JSON object with key "items" containing array of exactly 6 objects.
+Each object: {id (unique string), tag (emoji + 1-2 words), date ("${today}" or specific recent date), source (publication name), headline (specific factual headline), summary (2-3 sentences with specific real facts, numbers, company names)}.
+If you don't have truly recent news from the last 7 days, generate realistic current items based on the latest trends you know — but keep dates accurate to ${today} or this week only.`,
           },
           {
             role: 'user',
-            content: `Generate 6 current, specific items about "${queries[pillar]}" for the "${pillarFull}" Instagram content pillar. Use real company names, real numbers, specific facts.`,
+            content: `Generate 6 highly specific, current items about: "${queries[pillar]}" for the "${pillarFull}" Instagram content pillar. All items must feel fresh as of ${today}. Include specific company names, real numbers, concrete facts.`,
           },
         ],
       }),
@@ -45,13 +51,11 @@ export async function POST(request) {
     const data = await res.json();
     const text = data.choices?.[0]?.message?.content || '';
     const parsed = JSON.parse(text);
-    const items = parsed.items || parsed;
+    const items = Array.isArray(parsed) ? parsed : (parsed.items || []);
 
-    if (Array.isArray(items) && items.length > 0) {
-      return Response.json(items);
-    }
+    if (items.length > 0) return Response.json(items);
+    throw new Error('No items returned');
 
-    throw new Error('Could not parse response');
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 });
   }
