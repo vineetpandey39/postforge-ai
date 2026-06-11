@@ -68,13 +68,16 @@ export default function PostForge() {
   const [copied, setCopied] = useState('');
   const [tab, setTab] = useState('feed');
   const [lastRefreshed, setLastRefreshed] = useState({});
+  const [carouselImages, setCarouselImages] = useState(null);
+  const [imagesLoading, setImagesLoading] = useState(false);
+  const [imagesProgress, setImagesProgress] = useState('');
 
   const pc = pillar.color;
   const currentItems = items[pillar.id] || [];
 
   const switchPillar = (p) => {
     setPillar(p); setSelected([]); setOutput(null);
-    setCanvaResult(null); setRefreshMsg(null);
+    setCanvaResult(null); setRefreshMsg(null); setCarouselImages(null); setImagesProgress('');
   };
 
   const handleRefresh = async () => {
@@ -105,7 +108,7 @@ export default function PostForge() {
   const handleGenerate = async () => {
     const selItems = currentItems.filter(i => selected.includes(i.id));
     if (!selItems.length) return;
-    setGenerating(true); setOutput(null); setCanvaResult(null);
+    setGenerating(true); setOutput(null); setCanvaResult(null); setCarouselImages(null); setImagesProgress('');
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
@@ -122,23 +125,57 @@ export default function PostForge() {
   const handleCanva = async () => {
     if (!output) return;
     setCanvaLoading(true); setCanvaResult(null);
-    const slidesText = (output.slides || []).map((s, i) => `Slide ${i + 1}: ${s.title} — ${s.body}`).join('\n');
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      const res = await fetch('/api/canva', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514', max_tokens: 1000,
-          mcp_servers: [{ type: 'url', url: 'https://mcp.canva.com/mcp', name: 'canva-mcp' }],
-          messages: [{ role: 'user', content: `Create 5-slide Instagram carousel for @aibyvineet.\nHook: ${output.hook}\n${slidesText}\nDesign: ${output.canva_brief}\nStyle: 2026 viral editorial. Cream/white background. Bold serif. Claude coral #D97757 titles. @aibyvineet on every slide.` }],
+          hook: output.hook,
+          slides: output.slides,
+          canva_brief: output.canva_brief,
+          pillarId: pillar.id,
         }),
       });
       const data = await res.json();
-      const allText = (data.content || []).map(b => b.type === 'text' ? b.text : b.type === 'mcp_tool_result' ? JSON.stringify(b.content) : '').join('\n');
-      const url = allText.match(/https:\/\/www\.canva\.com\/d\/[^\s"')>]+/)?.[0];
-      setCanvaResult({ url });
-    } catch (e) { setCanvaResult({ error: 'Canva failed.' }); }
+      if (data.error) throw new Error(data.error);
+      setCanvaResult({ url: data.canvaUrl, message: data.message });
+    } catch (e) { setCanvaResult({ error: e.message || 'Canva failed.' }); }
     setCanvaLoading(false);
+  };
+
+  const handleGenerateCarouselImages = async () => {
+    if (!output || !output.slides) return;
+    setImagesLoading(true);
+    setCarouselImages(null);
+    setImagesProgress(`Generating ${1 + output.slides.length} slide visuals — this takes ~1-2 minutes...`);
+    try {
+      const res = await fetch('/api/carousel-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hook: output.hook,
+          slides: output.slides,
+          pillarId: pillar.id,
+        }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setCarouselImages(data.images || []);
+      setImagesProgress(`✅ ${data.successCount}/${data.totalCount} slides generated`);
+    } catch (e) {
+      setImagesProgress('');
+      alert(`Image generation failed: ${e.message}`);
+    }
+    setImagesLoading(false);
+  };
+
+  const downloadImage = (dataUrl, filename) => {
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   const copy = (text, key) => {
@@ -253,7 +290,7 @@ export default function PostForge() {
               <span style={{ color: '#6B7280' }}>· {format} · {selected.length} source{selected.length > 1 ? 's' : ''}</span>
             </div>
 
-            {/* Hook */}
+            {/* Hook — shown for all formats */}
             <div style={{ background: 'linear-gradient(135deg,rgba(245,158,11,0.07),rgba(239,68,68,0.07))', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '12px', padding: '14px 16px', marginBottom: '10px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <span style={{ fontSize: '10px', color: '#F59E0B', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.07em' }}>🪝 Hook</span>
@@ -262,31 +299,96 @@ export default function PostForge() {
               <div style={{ fontSize: '18px', fontWeight: '800', color: '#FBBF24', lineHeight: '1.3', letterSpacing: '-0.3px' }}>{output.hook}</div>
             </div>
 
-            {/* Slides */}
-            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '12px', padding: '14px 16px', marginBottom: '10px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                <span style={{ fontSize: '10px', color: '#6B7280', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.07em' }}>📄 Slides</span>
-                <CopyBtn text={(output.slides || []).map((s, i) => `Slide ${i + 1}: ${s.title}\n${s.body}`).join('\n\n')} id="slides" />
-              </div>
-              {(output.slides || []).map((s, i) => (
-                <div key={i} style={{ display: 'flex', gap: '9px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', padding: '10px 12px', marginBottom: '6px' }}>
-                  <div style={{ minWidth: '22px', height: '22px', background: pc + '20', border: `1px solid ${pc}40`, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', color: pc, flexShrink: 0 }}>{i + 1}</div>
-                  <div>
-                    <div style={{ fontWeight: '700', fontSize: '12px', color: '#E8EAF0', marginBottom: '3px' }}>{s.title}</div>
-                    <div style={{ fontSize: '11px', color: '#9CA3AF', lineHeight: '1.6' }}>{s.body}</div>
-                    {s.source && <div style={{ fontSize: '10px', color: '#10B981', marginTop: '3px', fontWeight: '600' }}>📰 {s.source}</div>}
-                  </div>
+            {/* ===== CAROUSEL ===== */}
+            {format === 'Carousel' && (
+              <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '12px', padding: '14px 16px', marginBottom: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '10px', color: '#6B7280', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.07em' }}>📄 Slides</span>
+                  <CopyBtn text={(output.slides || []).map((s, i) => `Slide ${i + 1}: ${s.title}\n${s.body}`).join('\n\n')} id="slides" />
                 </div>
-              ))}
-            </div>
+                {(output.slides || []).map((s, i) => (
+                  <div key={i} style={{ display: 'flex', gap: '9px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', padding: '10px 12px', marginBottom: '6px' }}>
+                    <div style={{ minWidth: '22px', height: '22px', background: pc + '20', border: `1px solid ${pc}40`, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', color: pc, flexShrink: 0 }}>{i + 1}</div>
+                    <div>
+                      <div style={{ fontWeight: '700', fontSize: '12px', color: '#E8EAF0', marginBottom: '3px' }}>{s.title}</div>
+                      <div style={{ fontSize: '11px', color: '#9CA3AF', lineHeight: '1.6' }}>{s.body}</div>
+                      {s.source && <div style={{ fontSize: '10px', color: '#10B981', marginTop: '3px', fontWeight: '600' }}>📰 {s.source}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
-            {/* Caption */}
+            {/* ===== REEL SCRIPT ===== */}
+            {format === 'Reel Script' && (
+              <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '12px', padding: '14px 16px', marginBottom: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '10px', color: '#6B7280', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.07em' }}>🎬 Shot-by-Shot Script</span>
+                  <CopyBtn text={(output.script_segments || []).map(s => `[${s.timestamp}]\nVisual: ${s.visual}\nVoiceover/Text: ${s.voiceover}`).join('\n\n')} id="script" />
+                </div>
+                {(output.script_segments || []).map((s, i) => (
+                  <div key={i} style={{ display: 'flex', gap: '9px', background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: '8px', padding: '10px 12px', marginBottom: '6px' }}>
+                    <div style={{ minWidth: '52px', height: '22px', background: pc + '20', border: `1px solid ${pc}40`, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: '700', color: pc, flexShrink: 0 }}>{s.timestamp}</div>
+                    <div>
+                      <div style={{ fontSize: '11px', color: '#9CA3AF', marginBottom: '3px' }}><span style={{ color: '#8B5CF6', fontWeight: '700' }}>🎥 Visual:</span> {s.visual}</div>
+                      <div style={{ fontWeight: '700', fontSize: '12px', color: '#E8EAF0' }}><span style={{ color: '#F59E0B' }}>🗣️</span> {s.voiceover}</div>
+                      {s.source && <div style={{ fontSize: '10px', color: '#10B981', marginTop: '3px', fontWeight: '600' }}>📰 {s.source}</div>}
+                    </div>
+                  </div>
+                ))}
+                {output.music_suggestion && (
+                  <div style={{ marginTop: '8px', padding: '8px 10px', background: 'rgba(139,92,246,0.06)', border: '1px solid rgba(139,92,246,0.15)', borderRadius: '7px', fontSize: '11px', color: '#C4B5FD' }}>
+                    🎵 <strong>Audio:</strong> {output.music_suggestion}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ===== STORY HOOK ===== */}
+            {format === 'Story Hook' && (
+              <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '12px', padding: '14px 16px', marginBottom: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '10px', color: '#6B7280', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.07em' }}>📲 Story Sequence</span>
+                  <CopyBtn text={(output.stories || []).map(s => `Story ${s.story_number} (${s.type}): ${s.text_overlay}\nSticker: ${s.sticker_suggestion}\nVisual: ${s.visual_direction}`).join('\n\n')} id="stories" />
+                </div>
+                <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+                  {(output.stories || []).map((s, i) => (
+                    <div key={i} style={{ minWidth: '150px', flexShrink: 0, background: 'rgba(255,255,255,0.02)', border: `1px solid ${pc}33`, borderRadius: '10px', padding: '10px 12px', display: 'flex', flexDirection: 'column', aspectRatio: '9/16', justifyContent: 'space-between' }}>
+                      <div>
+                        <div style={{ fontSize: '9px', fontWeight: '700', color: pc, textTransform: 'uppercase', marginBottom: '6px' }}>Story {s.story_number} · {s.type}</div>
+                        <div style={{ fontWeight: '800', fontSize: '13px', color: '#E8EAF0', lineHeight: '1.3' }}>{s.text_overlay}</div>
+                      </div>
+                      <div>
+                        {s.sticker_suggestion && s.sticker_suggestion !== 'none' && (
+                          <div style={{ fontSize: '10px', color: '#F59E0B', marginBottom: '4px' }}>🏷️ {s.sticker_suggestion}</div>
+                        )}
+                        <div style={{ fontSize: '10px', color: '#6B7280', lineHeight: '1.5' }}>🖼️ {s.visual_direction}</div>
+                        {s.source && <div style={{ fontSize: '9px', color: '#10B981', marginTop: '4px', fontWeight: '600' }}>📰 {s.source}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ===== CAPTION ONLY ===== */}
+            {format === 'Caption Only' && output.caption_body && (
+              <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '12px', padding: '14px 16px', marginBottom: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '10px', color: '#6B7280', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.07em' }}>📝 Full Post Body</span>
+                  <CopyBtn text={output.caption_body} id="caption_body" />
+                </div>
+                <div style={{ fontSize: '13px', color: '#D1D5DB', lineHeight: '1.8', whiteSpace: 'pre-line' }}>{output.caption_body}</div>
+              </div>
+            )}
+
+            {/* Caption / CTA / hashtags — shown for all formats */}
             <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '12px', padding: '14px 16px', marginBottom: '10px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span style={{ fontSize: '10px', color: '#6B7280', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.07em' }}>✍️ Caption</span>
+                <span style={{ fontSize: '10px', color: '#6B7280', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.07em' }}>✍️ {format === 'Caption Only' ? 'Ready-to-Post Caption' : 'Caption'}</span>
                 <CopyBtn text={`${output.caption}\n\n${output.cta}\n\n${output.hashtags}`} id="caption" />
               </div>
-              <div style={{ fontSize: '12px', color: '#D1D5DB', lineHeight: '1.7', marginBottom: '7px' }}>{output.caption}</div>
+              <div style={{ fontSize: '12px', color: '#D1D5DB', lineHeight: '1.7', marginBottom: '7px', whiteSpace: 'pre-line' }}>{output.caption}</div>
               <div style={{ fontSize: '12px', color: '#F59E0B', fontWeight: '600', marginBottom: '7px' }}>👉 {output.cta}</div>
               <div style={{ fontSize: '10px', color: '#4B5563', lineHeight: '1.9' }}>{output.hashtags}</div>
               {output.hashtag_strategy && (
@@ -299,7 +401,7 @@ export default function PostForge() {
             {/* Canva brief */}
             <div style={{ background: 'rgba(139,92,246,0.05)', border: '1px solid rgba(139,92,246,0.18)', borderRadius: '12px', padding: '14px 16px', marginBottom: '10px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <span style={{ fontSize: '10px', color: '#8B5CF6', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.07em' }}>🎨 Canva Brief</span>
+                <span style={{ fontSize: '10px', color: '#8B5CF6', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.07em' }}>🎨 {format === 'Carousel' ? 'Canva Brief' : 'Visual Direction'}</span>
                 <CopyBtn text={output.canva_brief} id="brief" />
               </div>
               <div style={{ fontSize: '11px', color: '#C4B5FD', lineHeight: '1.6' }}>{output.canva_brief}</div>
@@ -309,19 +411,72 @@ export default function PostForge() {
               ✅ {selected.length} verified source{selected.length > 1 ? 's' : ''} · {lastRefreshed[pillar.id] ? `Refreshed ${lastRefreshed[pillar.id]}` : 'Pre-loaded'} · Zero fabrication
             </div>
 
-            <button onClick={handleCanva} disabled={canvaLoading} style={{ width: '100%', padding: '12px', border: 'none', borderRadius: '9px', background: canvaLoading ? 'rgba(255,255,255,0.04)' : 'linear-gradient(135deg,#7C3AED,#2563EB)', color: canvaLoading ? '#4B5563' : '#fff', fontSize: '13px', fontWeight: '700', cursor: canvaLoading ? 'not-allowed' : 'pointer', marginBottom: '8px' }}>
-              {canvaLoading ? '🎨 Creating in Canva...' : '🎨 Create Carousel in Canva'}
-            </button>
+            {/* Generate Carousel Images via ChatGPT — primary action for Carousel format */}
+            {format === 'Carousel' && (
+              <>
+                <button onClick={handleGenerateCarouselImages} disabled={imagesLoading} style={{ width: '100%', padding: '13px', border: 'none', borderRadius: '9px', background: imagesLoading ? 'rgba(255,255,255,0.04)' : 'linear-gradient(135deg,#10B981,#059669)', color: imagesLoading ? '#4B5563' : '#fff', fontSize: '13px', fontWeight: '700', cursor: imagesLoading ? 'not-allowed' : 'pointer', marginBottom: '8px' }}>
+                  {imagesLoading ? '🖼️ Generating slide visuals...' : `🖼️ Generate ${1 + (output.slides || []).length} Carousel Images`}
+                </button>
+
+                {imagesProgress && (
+                  <div style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)', borderRadius: '8px', padding: '9px 12px', fontSize: '11px', color: '#10B981', marginBottom: '10px', textAlign: 'center' }}>
+                    {imagesLoading && <span style={{ display: 'inline-block', marginRight: '6px', animation: 'spin 1s linear infinite' }}>⏳</span>}
+                    {imagesProgress}
+                  </div>
+                )}
+
+                {/* Generated images grid */}
+                {carouselImages && carouselImages.length > 0 && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '10px' }}>
+                    {carouselImages.map((img, i) => (
+                      <div key={i} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '10px', overflow: 'hidden' }}>
+                        {img.success ? (
+                          <>
+                            <img src={img.image} alt={img.label} style={{ width: '100%', aspectRatio: '2/3', objectFit: 'cover', display: 'block' }} />
+                            <div style={{ padding: '8px 10px' }}>
+                              <div style={{ fontSize: '10px', color: '#9CA3AF', marginBottom: '6px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {i === 0 ? '🪝 Cover' : `📄 Slide ${i + 1}`}
+                              </div>
+                              <button onClick={() => downloadImage(img.image, `aibyvineet-${pillar.id}-slide-${i + 1}.png`)} style={{ width: '100%', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#10B981', borderRadius: '6px', padding: '5px', fontSize: '10px', fontWeight: '700', cursor: 'pointer' }}>
+                                ⬇ Download
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{ aspectRatio: '2/3', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', padding: '10px', textAlign: 'center' }}>
+                            <span style={{ fontSize: '20px', marginBottom: '6px' }}>⚠️</span>
+                            <span style={{ fontSize: '10px', color: '#FCA5A5' }}>{img.error || 'Failed'}</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {carouselImages && carouselImages.length > 0 && carouselImages.every(i => i.success) && (
+                  <button onClick={() => carouselImages.forEach((img, i) => setTimeout(() => downloadImage(img.image, `aibyvineet-${pillar.id}-slide-${i + 1}.png`), i * 300))} style={{ width: '100%', padding: '10px', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '8px', background: 'rgba(16,185,129,0.08)', color: '#10B981', fontSize: '12px', fontWeight: '700', cursor: 'pointer', marginBottom: '8px' }}>
+                    ⬇ Download All {carouselImages.length} Slides
+                  </button>
+                )}
+              </>
+            )}
+
+            {/* Canva — optional alternative */}
+            {format === 'Carousel' && (
+              <button onClick={handleCanva} disabled={canvaLoading} style={{ width: '100%', padding: '10px', border: '1px solid rgba(124,58,237,0.25)', borderRadius: '9px', background: canvaLoading ? 'rgba(255,255,255,0.04)' : 'rgba(124,58,237,0.08)', color: canvaLoading ? '#4B5563' : '#A78BFA', fontSize: '12px', fontWeight: '600', cursor: canvaLoading ? 'not-allowed' : 'pointer', marginBottom: '8px' }}>
+                {canvaLoading ? '🎨 Creating in Canva...' : '🎨 Or try Canva instead (optional)'}
+              </button>
+            )}
 
             {canvaResult && (
               <div style={{ background: 'rgba(124,58,237,0.07)', border: '1px solid rgba(124,58,237,0.25)', borderRadius: '9px', padding: '12px 14px', marginBottom: '8px' }}>
                 {canvaResult.url
                   ? <><div style={{ fontSize: '12px', color: '#A78BFA', fontWeight: '700', marginBottom: '8px' }}>✅ Canva Design Ready!</div><a href={canvaResult.url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', background: 'linear-gradient(135deg,#7C3AED,#2563EB)', color: '#fff', borderRadius: '7px', padding: '8px 16px', fontSize: '12px', fontWeight: '700', textDecoration: 'none' }}>Open in Canva →</a></>
-                  : <div style={{ fontSize: '11px', color: '#6B7280' }}>{canvaResult.error || 'Check your Canva account.'}</div>}
+                  : <div style={{ fontSize: '11px', color: '#6B7280' }}>{canvaResult.error || canvaResult.message || 'Check your Canva account.'}</div>}
               </div>
             )}
 
-            <button onClick={() => { setOutput(null); setSelected([]); setCanvaResult(null); setTab('feed'); }} style={{ width: '100%', padding: '9px', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px', background: 'rgba(255,255,255,0.02)', color: '#6B7280', fontSize: '11px', cursor: 'pointer' }}>← New Post</button>
+            <button onClick={() => { setOutput(null); setSelected([]); setCanvaResult(null); setCarouselImages(null); setImagesProgress(''); setTab('feed'); }} style={{ width: '100%', padding: '9px', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '8px', background: 'rgba(255,255,255,0.02)', color: '#6B7280', fontSize: '11px', cursor: 'pointer' }}>← New Post</button>
           </div>
         )}
 
