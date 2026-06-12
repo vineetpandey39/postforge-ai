@@ -1,168 +1,143 @@
-export const maxDuration = 300;
-
-// ── Pillar palettes (color/mood only — NOT layout) ──────────────────────────
-const PILLAR_PALETTE = {
-  news:           'deep charcoal background (#0E0E10), one bold accent color (warm red #E03131) used sparingly, off-white text (#F5F5F5). Editorial, serious, premium — NOT a tabloid.',
-  tool:           'clean off-white background (#FAFAF7), near-black text (#111), one electric accent (cobalt blue #2D5BFF or lime #84CC16). Minimal Swiss tech-product look.',
-  income:         'rich dark green-black background (#0B1B12), warm gold accent (#E6B450), cream text (#F4EFE6). Quiet-luxury wealth feel, NOT flashy.',
-  transformation: 'warm cream background (#F3EDE3), soft ink text (#2A2520), terracotta accent (#C26B4A). Calm, editorial, journal-like.',
-  automation:     'midnight navy background (#0A1228), cyan/electric-blue accent (#38BDF8), pale text (#E8EEF7). Clean futuristic tech, NOT busy.',
-};
-
-// ── Layout archetypes — rotated so every slide looks DIFFERENT ───────────────
-// Each is a distinct, well-known editorial/social composition. We cycle through them.
-const LAYOUT_ARCHETYPES = [
-  'BIG-TYPE CENTER: the headline is the entire design — set enormous, tightly kerned, centered, filling ~70% of the frame. Generous margins. One thin accent rule under it. Nothing else competes.',
-  'TOP-ANCHOR + NEGATIVE SPACE: headline locked to the top third in a tight block, the lower two-thirds left almost empty except for one small minimalist line-icon or a single thin accent shape. Lots of breathing room.',
-  'SPLIT BLOCK: a solid accent-color band occupies the lower 40% of the frame; headline sits in the band in the contrasting color, the upper 60% is plain background with a small kicker word top-left.',
-  'GIANT STAT: one number/percentage/figure is the hero — set massive in the accent color, centered; a short 2-3 word label sits directly beneath it in small caps. Minimal everything else.',
-  'CORNER KICKER + LEFT RAG: a tiny label in the top-left corner, headline set left-aligned (ragged right) starting from the vertical middle, occupying the left two-thirds. Clean column of empty space on the right.',
-  'FRAMED EDITORIAL: a thin 1px border inset from the edges frames the whole slide like a magazine page; headline centered within, set in a refined large weight, one small accent dot or underline.',
-];
-
-const COVER_ARCHETYPES = [
-  'POSTER SHOUT: a single 2-4 word phrase set absolutely massive, centered, filling the frame edge to edge, tightly stacked on 2-3 lines. Maximum contrast. One word may be in the accent color for emphasis. No icons, no clutter.',
-  'REDACTED REVEAL: the phrase is centered and large; ONE key word is covered by a solid accent-color bar (as if censored/redacted), creating curiosity. Clean background, nothing else.',
-  'OVERSIZED QUESTION: a short curiosity question set very large and centered, the final word dropped to its own line in the accent color, with a single oversized "?" as a graphic element. Minimal.',
-  'TOP-TEASER: the phrase sits in the top half in huge type; the bottom half is empty except for a single thin downward arrow or chevron hinting "keep swiping". Lots of negative space.',
-];
-
-function safe(t) {
-  return String(t || '').replace(/["{}]/g, '').replace(/\s+/g, ' ').trim();
-}
-
-// Cover prompt — renders ONLY the exact provided words
-function buildCoverPrompt(coverText, coverSub, pillarId, variantSeed) {
-  const palette = PILLAR_PALETTE[pillarId] || PILLAR_PALETTE.news;
-  const archetype = COVER_ARCHETYPES[variantSeed % COVER_ARCHETYPES.length];
-  const cover = safe(coverText);
-  const sub = safe(coverSub);
-
-  return `Design a single vertical 4:5 Instagram carousel COVER (portrait). Flat 2D graphic design / typographic poster — NOT a photo, NOT 3D.
-
-COLOR & MOOD: ${palette}
-
-COMPOSITION (follow this exactly): ${archetype}
-
-THE ONLY TEXT ALLOWED ON THE IMAGE — render these characters EXACTLY, spelled correctly, with NO other words anywhere:
-• MAIN: ${cover}
-${sub ? `• SMALL KICKER: ${sub}` : '• (no kicker)'}
-• TINY HANDLE at the very bottom center: @aibyvineet
-
-ABSOLUTE RULES:
-- Do NOT add any words, sentences, captions, labels, taglines, or repeated text other than the lines listed above. No "BREAKING NEWS", no lorem-ipsum, no duplicated phrases, no scattered words in corners.
-- Spell every word correctly. Keep total word count tiny.
-- No exclamation/warning icons, no eye icons, no lock icons, no glitch noise unless the composition explicitly calls for one simple accent shape.
-- High-end, restrained, modern editorial aesthetic. Strong typography is the design. Clean kerning, professional layout, lots of intentional negative space.
-- No realistic human faces. No photographic textures. No watermarks other than @aibyvineet.`;
-}
-
-// Content slide prompt — renders ONLY the exact provided words, varied layout
-function buildSlidePrompt(slideNumber, totalSlides, headline, subline, stat, pillarId, variantSeed) {
-  const palette = PILLAR_PALETTE[pillarId] || PILLAR_PALETTE.news;
-  const archetype = stat
-    ? LAYOUT_ARCHETYPES[3] // GIANT STAT layout when a stat exists
-    : LAYOUT_ARCHETYPES[variantSeed % LAYOUT_ARCHETYPES.length];
-  const h = safe(headline);
-  const s = safe(subline);
-  const st = safe(stat);
-
-  return `Design a single vertical 4:5 Instagram carousel slide (slide ${slideNumber} of ${totalSlides}), part of a consistent series. Flat 2D graphic design / typographic poster — NOT a photo, NOT 3D.
-
-COLOR & MOOD (must match the rest of the series): ${palette}
-
-COMPOSITION (follow this exactly): ${archetype}
-
-THE ONLY TEXT ALLOWED ON THE IMAGE — render these EXACTLY, spelled correctly, nothing else:
-• HEADLINE: ${h}
-${st ? `• FEATURED FIGURE (make this the visual hero, very large, in the accent color): ${st}` : ''}
-${s ? `• SMALL SUBLINE: ${s}` : '• (no subline)'}
-• TINY HANDLE at the very bottom center: @aibyvineet
-
-ABSOLUTE RULES:
-- Render ONLY the text lines listed above. Do NOT invent extra words, sentences, paragraphs, repeated phrases, or filler. No scattered or duplicated text anywhere.
-- Spell every word correctly. Keep it minimal — the layout and color carry the design, not dense text.
-- Consistent with a premium editorial carousel series: same palette, same typographic family feel, but THIS slide must use the distinct composition described above so it does not look identical to the other slides.
-- Allowed graphics: at most ONE simple flat line-icon or geometric accent shape if it suits the layout. No exclamation/eye/lock icons, no glitch, no noise.
-- No realistic human faces. No photographic textures. No watermarks other than @aibyvineet.`;
-}
-
-async function generateImage(apiKey, prompt) {
-  const res = await fetch('https://api.openai.com/v1/images/generations', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model: 'gpt-image-1',
-      prompt,
-      size: '1024x1536',
-      quality: 'medium',
-      n: 1,
-    }),
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Image API error ${res.status}: ${err.slice(0, 200)}`);
-  }
-  const data = await res.json();
-  const b64 = data.data?.[0]?.b64_json;
-  if (!b64) throw new Error('No image returned');
-  return b64;
-}
-
 export async function POST(request) {
   try {
-    const body = await request.json();
-    const { hook, slides, pillarId } = body;
-    // New explicit text fields (fall back gracefully to old fields if missing)
-    const coverText = body.cover_text || hook;
-    const coverSub = body.cover_subtext || '';
+    const { selectedItems, pillarFull, pillarId, format } = await request.json();
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) return Response.json({ error: 'API key not configured' }, { status: 500 });
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) return Response.json({ error: 'OpenAI API key not configured' }, { status: 500 });
-    if (!coverText || !Array.isArray(slides)) return Response.json({ error: 'cover text and slides are required' }, { status: 400 });
+    const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
-    const totalSlides = 1 + slides.length;
+    const PILLAR_FOCUS = {
+      news: 'Focus on what this means for AI income builders. Make it urgent and actionable.',
+      tool: 'Focus on practical use cases, time/money saved, how to start today.',
+      income: 'Focus on specific numbers and replicable steps. Make reader believe they can do this.',
+      transformation: 'Focus on identity shift and emotional resonance.',
+      automation: 'Focus on exact steps, time saved, cost per output.',
+    };
 
-    // Build prompts. variantSeed offsets each slide to a different layout archetype.
-    const prompts = [
-      { index: 0, label: 'Cover', prompt: buildCoverPrompt(coverText, coverSub, pillarId, 0) },
-      ...slides.map((s, i) => ({
-        index: i + 1,
-        label: s.slide_headline || s.title || `Slide ${i + 2}`,
-        prompt: buildSlidePrompt(
-          i + 2, totalSlides,
-          s.slide_headline || s.title,
-          s.slide_subline || '',
-          s.slide_stat || '',
-          pillarId,
-          i + 1 // seed -> different layout per slide
-        ),
-      })),
-    ];
+    const context = selectedItems
+      .map((item, i) => `${i + 1}. [${item.source} — ${item.date}] ${item.headline}\n   ${item.summary}`)
+      .join('\n\n');
 
-    const results = [];
-    const BATCH_SIZE = 2;
-    for (let i = 0; i < prompts.length; i += BATCH_SIZE) {
-      const batch = prompts.slice(i, i + BATCH_SIZE);
-      const batchResults = await Promise.all(
-        batch.map(async (p) => {
-          try {
-            const b64 = await generateImage(apiKey, p.prompt);
-            return { index: p.index, label: p.label, image: `data:image/png;base64,${b64}`, success: true };
-          } catch (e) {
-            return { index: p.index, label: p.label, error: e.message, success: false };
-          }
-        })
-      );
-      results.push(...batchResults);
+    const topics = selectedItems.map(i => i.headline).join(', ');
+    const focus = PILLAR_FOCUS[pillarId] || '';
+
+    // ── Format-specific JSON schemas and instructions ─────────────────────
+    const FORMAT_CONFIG = {
+      Carousel: {
+        instructions: `Create a 5-slide Instagram carousel. CRITICAL: also produce the EXACT minimal on-image text for each slide. These on-image text fields will be rendered VERBATIM onto generated images, so they must be extremely short, punchy, and self-contained — no markdown, no quotes, no emojis inside them, no trailing punctuation unless it's a single "?" or "!".`,
+        schema: `{
+  "hook": "max 12 word scroll-stopping hook from real content",
+  "cover_text": "THE EXACT words to print huge on the cover slide. 2-5 words ONLY. All caps. A curiosity bomb. No punctuation except one optional ? or !. Example: 'AI JUST CHANGED EVERYTHING' or 'NOBODY TOLD YOU THIS'",
+  "cover_subtext": "optional tiny kicker line, max 3 words, or empty string",
+  "slides": [
+    {"title": "slide title", "body": "2-3 lines from verified content", "source": "source name", "slide_headline": "EXACT 2-5 word headline to print on this slide, all caps, no punctuation", "slide_subline": "optional one short phrase under 6 words to print smaller, or empty string", "slide_stat": "a single number/stat/percentage to feature visually if relevant (e.g. '$200B', '3X', '84%'), or empty string"},
+    {"title": "slide title", "body": "2-3 lines", "source": "source name", "slide_headline": "2-5 words", "slide_subline": "under 6 words or empty", "slide_stat": "stat or empty"},
+    {"title": "slide title", "body": "2-3 lines", "source": "source name", "slide_headline": "2-5 words", "slide_subline": "under 6 words or empty", "slide_stat": "stat or empty"},
+    {"title": "slide title", "body": "2-3 lines", "source": "source name", "slide_headline": "2-5 words", "slide_subline": "under 6 words or empty", "slide_stat": "stat or empty"},
+    {"title": "CTA title", "body": "action step + follow @aibyvineet", "source": "", "slide_headline": "EXACT 2-4 word CTA, e.g. 'FOLLOW FOR MORE' or 'SAVE THIS NOW', all caps", "slide_subline": "@aibyvineet", "slide_stat": ""}
+  ],
+  "caption": "150 char max caption with emojis ending in question",
+  "cta": "one strong call to action",
+  "canva_brief": "visual direction in one sentence",
+  "hashtags": "30 hashtags relevant to this specific post topics separated by spaces",
+  "hashtag_strategy": "one sentence explaining hashtag mix chosen"
+}`,
+      },
+      'Reel Script': {
+        instructions: `Create a 30-45 second vertical video Reel script with shot-by-shot breakdown. NO carousel slides — this is a spoken/visual video script for one continuous Reel.`,
+        schema: `{
+  "hook": "max 12 word scroll-stopping spoken hook for the first 1-2 seconds, from real content",
+  "script_segments": [
+    {"timestamp": "0-3s", "visual": "what's on screen / B-roll / text overlay description", "voiceover": "exact words to say or on-screen text", "source": "source name or empty"},
+    {"timestamp": "3-10s", "visual": "...", "voiceover": "...", "source": "source name or empty"},
+    {"timestamp": "10-20s", "visual": "...", "voiceover": "...", "source": "source name or empty"},
+    {"timestamp": "20-35s", "visual": "...", "voiceover": "...", "source": "source name or empty"},
+    {"timestamp": "35-45s", "visual": "CTA visual — follow @aibyvineet text overlay", "voiceover": "verbal CTA + follow @aibyvineet", "source": ""}
+  ],
+  "caption": "150 char max caption with emojis ending in question",
+  "cta": "one strong call to action",
+  "canva_brief": "visual direction for thumbnail/cover frame in one sentence",
+  "music_suggestion": "type of trending audio/BGM mood that fits this Reel (e.g. 'upbeat tech trending sound' or 'suspenseful build-up audio')",
+  "hashtags": "30 hashtags relevant to this specific Reel topic separated by spaces",
+  "hashtag_strategy": "one sentence explaining hashtag mix chosen"
+}`,
+      },
+      'Story Hook': {
+        instructions: `Create content for a sequence of 3-4 Instagram Stories (vertical, full-screen, ephemeral 24h format). Each story is a single full-screen moment — punchy, interactive, uses stickers/polls/questions. NOT a carousel post.`,
+        schema: `{
+  "hook": "max 12 word scroll-stopping opening line for story 1, from real content",
+  "stories": [
+    {"story_number": 1, "type": "hook", "text_overlay": "big bold text for this story frame", "sticker_suggestion": "e.g. 'Poll: Yes/No' or 'Question sticker' or 'Countdown' or 'none'", "visual_direction": "what background/visual for this frame", "source": "source name or empty"},
+    {"story_number": 2, "type": "context", "text_overlay": "...", "sticker_suggestion": "...", "visual_direction": "...", "source": "source name or empty"},
+    {"story_number": 3, "type": "value", "text_overlay": "...", "sticker_suggestion": "...", "visual_direction": "...", "source": "source name or empty"},
+    {"story_number": 4, "type": "cta", "text_overlay": "Follow @aibyvineet for more + swipe up / link sticker", "sticker_suggestion": "Link sticker or Follow sticker", "visual_direction": "CTA visual direction", "source": ""}
+  ],
+  "caption": "short caption if cross-posting to feed as story highlight, 100 char max with emojis",
+  "cta": "one strong call to action",
+  "canva_brief": "visual direction for the story series cover/highlight icon in one sentence",
+  "hashtags": "10-15 relevant hashtags for story sharing separated by spaces",
+  "hashtag_strategy": "one sentence explaining hashtag mix chosen"
+}`,
+      },
+      'Caption Only': {
+        instructions: `Create ONLY a standalone Instagram caption (no slides, no script, no stories) — a strong, scroll-stopping written post that works with any single image or could stand alone as a text post.`,
+        schema: `{
+  "hook": "max 12 word scroll-stopping opening line of the caption, from real content",
+  "caption_body": "Full Instagram caption body, 3-5 short paragraphs/lines with line breaks, emoji-rich, tells a complete story or makes a complete point based on verified content. 400-600 characters total including hook.",
+  "caption": "the complete ready-to-post caption combining hook + caption_body + cta, formatted with line breaks, 150-300 chars summary version",
+  "cta": "one strong call to action driving comments or saves",
+  "canva_brief": "visual direction for a single accompanying image in one sentence",
+  "hashtags": "30 hashtags relevant to this specific post topic separated by spaces",
+  "hashtag_strategy": "one sentence explaining hashtag mix chosen"
+}`,
+      },
+    };
+
+    const config = FORMAT_CONFIG[format] || FORMAT_CONFIG.Carousel;
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1500,
+        system: `You are a top Instagram/Reels growth strategist for @aibyvineet (AI income, passive income, transformation niche).
+Today is ${today}. Use ONLY provided content. Never fabricate. Return ONLY valid JSON — no markdown, no backticks, no extra text.`,
+        messages: [{
+          role: 'user',
+          content: `Format requested: "${format}" for the "${pillarFull}" pillar.
+${config.instructions}
+${focus}
+
+VERIFIED CONTENT:
+${context}
+
+POST TOPICS: ${topics}
+
+Return ONLY this JSON structure with no deviations:
+${config.schema}`,
+        }],
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`API error ${res.status}: ${err.slice(0, 200)}`);
     }
 
-    results.sort((a, b) => a.index - b.index);
-    return Response.json({
-      images: results,
-      successCount: results.filter(r => r.success).length,
-      totalCount: results.length,
-    });
+    const data = await res.json();
+    const text = (data.content || []).find(b => b.type === 'text')?.text || '';
+    const clean = text.replace(/```json|```/g, '').trim();
+    const match = clean.match(/\{[\s\S]*\}/);
+    if (match) {
+      const parsed = JSON.parse(match[0]);
+      return Response.json({ ...parsed, _format: format });
+    }
+    throw new Error(`Parse failed. Raw: ${text.slice(0, 300)}`);
 
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 });
