@@ -154,6 +154,8 @@ export default function PostForge() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           hook: output.hook,
+          cover_text: output.cover_text,
+          cover_subtext: output.cover_subtext,
           slides: output.slides,
           pillarId: pillar.id,
         }),
