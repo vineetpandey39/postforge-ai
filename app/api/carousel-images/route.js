@@ -4,11 +4,31 @@ import { jsonResponse } from '../../lib/validation';
 export const maxDuration = 300;
 
 const PILLAR_PALETTE = {
-  news: 'black glass newsroom, electric red and neon green accents, glowing data feeds, premium tech urgency',
-  tool: 'black or deep graphite lab, cobalt blue and acid green glow, holographic tools, sharp SaaS aesthetic',
-  income: 'green-black wealth dashboard, neon money signals, launch-pad energy, premium AI income mood',
-  transformation: 'dark cinematic before-after portal, warm gold and neon green accents, aspirational creator energy',
-  automation: 'midnight automation command center, cyan and neon green circuitry, glowing workflow streams'
+  news: [
+    'black glass newsroom with electric red, white, and amber urgency accents',
+    'deep navy editorial command center with cobalt, silver, and warning-orange highlights',
+    'dark magazine cover style with crimson headline accents and clean white typography'
+  ],
+  tool: [
+    'graphite SaaS lab with cobalt blue, lime highlights, and crisp white UI panels',
+    'bright white premium product launch board with black type and electric blue accents',
+    'deep violet developer workspace with cyan holograms and sharp glassmorphism'
+  ],
+  income: [
+    'black and emerald wealth dashboard with gold accents and high-contrast finance visuals',
+    'midnight blue creator business cockpit with teal charts and warm gold signal lights',
+    'cream and black luxury finance editorial with restrained green performance accents'
+  ],
+  transformation: [
+    'warm black-to-gold cinematic portal with soft cream typography',
+    'deep plum and rose creator transformation scene with elegant editorial contrast',
+    'charcoal journal-meets-tech dashboard with terracotta and ivory highlights'
+  ],
+  automation: [
+    'midnight automation command center with cyan circuitry and white workflow nodes',
+    'black and orange robotic workflow floor with steel UI panels and amber sparks',
+    'deep indigo operations map with teal, white, and magenta routing signals'
+  ]
 };
 
 const VISUAL_SYSTEMS = [
@@ -33,11 +53,21 @@ function safeText(value, fallback = '') {
   return String(value || fallback).replace(/[{}]/g, '').replace(/\s+/g, ' ').trim().slice(0, 90);
 }
 
-function imagePrompt({ type, role = 'proof', text, subline, stat, visual, pillarId, layoutIndex }) {
-  const palette = PILLAR_PALETTE[pillarId] || PILLAR_PALETTE.news;
+function pickPalette(pillarId, layoutIndex) {
+  const palettes = PILLAR_PALETTE[pillarId] || PILLAR_PALETTE.news;
+  return palettes[layoutIndex % palettes.length];
+}
+
+function imagePrompt({ type, role = 'proof', text, subline, stat, visual, body, contentBrief, source, pillarId, layoutIndex }) {
+  const palette = pickPalette(pillarId, layoutIndex);
   const visualSystem = visual || VISUAL_SYSTEMS[layoutIndex % VISUAL_SYSTEMS.length];
   const isCover = role === 'cover' || layoutIndex === 0;
   const roleDirection = ROLE_DIRECTIONS[role] || ROLE_DIRECTIONS.proof;
+  const factualContext = [
+    body ? `Slide meaning: ${safeText(body, '').slice(0, 180)}` : '',
+    contentBrief ? `Must communicate visually: ${safeText(contentBrief, '').slice(0, 180)}` : '',
+    source ? `Source context: ${safeText(source)}` : ''
+  ].filter(Boolean).join('\n');
   const textRules = [
     `MAIN TEXT EXACTLY: "${safeText(text)}"`,
     subline ? `SMALL TEXT EXACTLY: "${safeText(subline)}"` : '',
@@ -48,16 +78,18 @@ function imagePrompt({ type, role = 'proof', text, subline, stat, visual, pillar
   return `MASTER PROMPT FOR ${type.toUpperCase()}:
 Create a vertical 3:4 Instagram carousel image, 1024x1536.
 Goal: stop-scroll viral AI creator content that feels ahead of every other creator.
-Style: cinematic high-contrast AI/tech poster, dense premium visuals, glowing neon green energy, deep black background, crisp 3D depth, dramatic lighting, sharp futuristic UI details.
+Style: cinematic high-contrast AI/tech editorial poster, dense premium visuals, crisp 3D depth, dramatic lighting, sharp futuristic UI details, not a generic template.
 Palette and mood: ${palette}.
 Narrative role: ${roleDirection}.
-Core visual concept: ${visualSystem}.
+Content that the image MUST match:
+${factualContext || 'Use the text and visual concept as the only content source.'}
+Core visual concept tied to this content: ${visualSystem}.
 Composition: ${isCover
     ? 'extreme hook cover, massive curiosity, one dominant cinematic object, diagonal energy, danger/secret/reveal feeling, do not fully explain the story yet, thumbnail-readable from far away'
     : 'follow-up story slide, dense but organized visual metaphor, one clear hero object, supporting holograms/icons/charts, each slide should advance the story and make the viewer swipe again'}.
-Typography: huge bold condensed sans-serif, white plus neon green emphasis, minimal words only, no body paragraphs.
+Typography: huge bold condensed sans-serif, high contrast with the selected palette, minimal words only, no body paragraphs.
 Text to render: ${textRules}.
-Strict rules: render no other words, no random labels, no fake brand logos, no watermarks, no misspelled text, no clutter over the main text, keep @aibyvineet small and centered at the bottom, make the image look like a finished viral Instagram carousel slide.`;
+Strict rules: render no other words, no random labels, no fake brand logos, no invented statistics, no watermarks, no misspelled text, no clutter over the main text, keep @aibyvineet small and centered at the bottom, make the image visibly about the actual slide content rather than a generic AI poster.`;
 }
 
 async function generateImage(apiKey, prompt) {
@@ -99,7 +131,7 @@ export async function POST(request) {
     if (!Array.isArray(slides) || !slides.length) return jsonResponse({ error: 'Carousel slides are required.' }, 400);
 
     const prompts = [
-      { index: 0, label: 'Hook / Open Loop', prompt: imagePrompt({ type: 'cover', role: 'cover', text: cover_text || hook, subline: cover_subtext || '', visual: cover_visual_prompt, pillarId, layoutIndex: 0 }) },
+      { index: 0, label: 'Hook / Open Loop', prompt: imagePrompt({ type: 'cover', role: 'cover', text: cover_text || hook, subline: cover_subtext || '', visual: cover_visual_prompt, body: hook, contentBrief: cover_visual_prompt, pillarId, layoutIndex: 0 }) },
       ...slides.map((slide, i) => ({
         index: i + 1,
         label: `${slide.role ? `${safeText(slide.role)} / ` : ''}${slide.slide_headline || slide.title || `Slide ${i + 1}`}`,
@@ -110,6 +142,9 @@ export async function POST(request) {
           subline: slide.slide_subline || '',
           stat: slide.slide_stat || '',
           visual: slide.visual_prompt || slide.body || '',
+          body: slide.body || '',
+          contentBrief: slide.content_brief || '',
+          source: slide.source || '',
           pillarId,
           layoutIndex: i + 1
         })
