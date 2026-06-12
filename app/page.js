@@ -175,7 +175,7 @@ export default function PostForge() {
             {output.slides && <>
               <h3>Slides</h3>
               {output.slides.map((s, i) => <div key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 10, marginTop: 10 }}>
-                <strong>{i + 1}. {s.title}</strong>
+                <strong>{i + 1}. {s.role ? `${String(s.role).toUpperCase()} - ` : ''}{s.title}</strong>
                 <p style={{ whiteSpace: 'pre-wrap', color: '#CBD5E1' }}>{s.body}</p>
                 {s.source_url && <a href={s.source_url} target="_blank" rel="noreferrer" style={{ color: '#60A5FA', fontSize: 12 }}>{s.source}</a>}
               </div>)}

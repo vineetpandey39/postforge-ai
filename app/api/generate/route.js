@@ -12,23 +12,33 @@ const PILLAR_FOCUS = {
 
 const FORMAT_CONFIG = {
   Carousel: {
-    instructions: `Create a 6-image Instagram carousel plan: 1 extreme hook cover plus 5 follow-up slides.
-Use very few words on the images. Make the visual direction do the heavy lifting.
-Cover hook must feel pattern-breaking, urgent, and curiosity-heavy, for example: "WAIT... WHAT?", "CHECK THIS BEFORE IT'S GONE", "THIS CHANGES EVERYTHING", "SHHH... WATCH THIS", "INSTAGRAM MAY HATE THIS".
-Do not reuse those examples verbatim every time; create a fresh hook from the verified source.
-Slides 2-6 should continue the update with dense, premium, futuristic visual concepts and concise text only.
-Every factual claim must trace back to selected sources. Every image must include @aibyvineet at the bottom.`,
+    instructions: `Create a 6-image Instagram carousel using a top-creator curiosity arc.
+The carousel must not feel like news cards. It must feel like a swipe-worthy story with an open loop.
+
+Required story arc:
+1. Cover / open loop: do NOT reveal the whole news. Create an extreme curiosity hook that makes viewers need slide 2. Pattern examples: "WAIT... WHAT?", "THIS QUIETLY CHANGES AI", "CHECK THIS BEFORE IT'S GONE", "THE PART NOBODY SAW", "SHHH... WATCH THIS". Do not reuse examples verbatim. Use 3-7 words only.
+2. Problem / tension: name the pain, risk, hidden shift, or unfair advantage created by the update.
+3. Proof / why now: use one verified fact, date, number, source, or concrete event that proves this is real.
+4. Reveal / mechanism: explain the hidden mechanism or why this matters in one sharp idea.
+5. Solution / play: tell creators/builders what move to make now.
+6. Closure / save: make the viewer save, follow, or act, while closing the open loop.
+
+Text discipline:
+- Image text must be minimal: headline 2-5 words, subline under 5 words, optional stat only if real.
+- Never put paragraphs on images. The visual metaphor should carry the density.
+- Every factual claim must trace back to selected sources.
+- Every image must include @aibyvineet at the bottom.`,
     schema: {
       hook: 'max 12 words',
       cover_text: '3-7 words, all caps, extreme curiosity hook',
       cover_subtext: 'max 4 words or empty',
       cover_visual_prompt: 'one sentence describing a cinematic dense viral visual metaphor for the cover',
       slides: [
-        { title: 'short title', body: '1 short line', source: 'source name', source_url: 'url', slide_headline: '2-5 words all caps', slide_subline: 'under 5 words', slide_stat: 'real stat or empty', visual_prompt: 'dense cinematic visual metaphor, no text instructions' },
-        { title: 'short title', body: '1 short line', source: 'source name', source_url: 'url', slide_headline: '2-5 words all caps', slide_subline: 'under 5 words', slide_stat: 'real stat or empty', visual_prompt: 'dense cinematic visual metaphor, no text instructions' },
-        { title: 'short title', body: '1 short line', source: 'source name', source_url: 'url', slide_headline: '2-5 words all caps', slide_subline: 'under 5 words', slide_stat: 'real stat or empty', visual_prompt: 'dense cinematic visual metaphor, no text instructions' },
-        { title: 'short title', body: '1 short line', source: 'source name', source_url: 'url', slide_headline: '2-5 words all caps', slide_subline: 'under 5 words', slide_stat: 'real stat or empty', visual_prompt: 'dense cinematic visual metaphor, no text instructions' },
-        { title: 'CTA title', body: 'action step + follow @aibyvineet', source: '', source_url: '', slide_headline: 'SAVE THIS NOW', slide_subline: 'FOLLOW @aibyvineet', slide_stat: '', visual_prompt: 'premium save-worthy final slide with futuristic archive, bookmark, or vault visual' }
+        { role: 'problem', title: 'short title', body: '1 short line naming the tension', source: 'source name', source_url: 'url', slide_headline: '2-5 words all caps', slide_subline: 'under 5 words', slide_stat: 'real stat or empty', visual_prompt: 'dense cinematic problem/tension visual metaphor' },
+        { role: 'proof', title: 'short title', body: '1 short line with verified proof', source: 'source name', source_url: 'url', slide_headline: '2-5 words all caps', slide_subline: 'under 5 words', slide_stat: 'real stat or empty', visual_prompt: 'dense cinematic proof/evidence visual metaphor' },
+        { role: 'reveal', title: 'short title', body: '1 short line revealing the hidden mechanism', source: 'source name', source_url: 'url', slide_headline: '2-5 words all caps', slide_subline: 'under 5 words', slide_stat: 'real stat or empty', visual_prompt: 'dense cinematic reveal/mechanism visual metaphor' },
+        { role: 'solution', title: 'short title', body: '1 short line telling the creator move', source: 'source name or empty', source_url: 'url or empty', slide_headline: '2-5 words all caps', slide_subline: 'under 5 words', slide_stat: 'real stat or empty', visual_prompt: 'dense cinematic solution/playbook visual metaphor' },
+        { role: 'closure', title: 'CTA title', body: 'save/follow/action step + follow @aibyvineet', source: '', source_url: '', slide_headline: 'SAVE THIS NOW', slide_subline: 'FOLLOW @aibyvineet', slide_stat: '', visual_prompt: 'premium save-worthy final slide with futuristic archive, bookmark, or vault visual' }
       ],
       caption: '150 chars max',
       cta: 'one CTA',
