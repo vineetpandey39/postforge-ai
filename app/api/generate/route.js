@@ -12,17 +12,23 @@ const PILLAR_FOCUS = {
 
 const FORMAT_CONFIG = {
   Carousel: {
-    instructions: 'Create a 5-slide Instagram carousel. Minimal text. Every factual claim must trace back to selected sources.',
+    instructions: `Create a 6-image Instagram carousel plan: 1 extreme hook cover plus 5 follow-up slides.
+Use very few words on the images. Make the visual direction do the heavy lifting.
+Cover hook must feel pattern-breaking, urgent, and curiosity-heavy, for example: "WAIT... WHAT?", "CHECK THIS BEFORE IT'S GONE", "THIS CHANGES EVERYTHING", "SHHH... WATCH THIS", "INSTAGRAM MAY HATE THIS".
+Do not reuse those examples verbatim every time; create a fresh hook from the verified source.
+Slides 2-6 should continue the update with dense, premium, futuristic visual concepts and concise text only.
+Every factual claim must trace back to selected sources. Every image must include @aibyvineet at the bottom.`,
     schema: {
       hook: 'max 12 words',
-      cover_text: '2-5 words, all caps',
-      cover_subtext: 'max 3 words or empty',
+      cover_text: '3-7 words, all caps, extreme curiosity hook',
+      cover_subtext: 'max 4 words or empty',
+      cover_visual_prompt: 'one sentence describing a cinematic dense viral visual metaphor for the cover',
       slides: [
-        { title: 'short title', body: '2 short lines', source: 'source name', source_url: 'url', slide_headline: '2-5 words all caps', slide_subline: 'under 6 words', slide_stat: 'real stat or empty' },
-        { title: 'short title', body: '2 short lines', source: 'source name', source_url: 'url', slide_headline: '2-5 words all caps', slide_subline: 'under 6 words', slide_stat: 'real stat or empty' },
-        { title: 'short title', body: '2 short lines', source: 'source name', source_url: 'url', slide_headline: '2-5 words all caps', slide_subline: 'under 6 words', slide_stat: 'real stat or empty' },
-        { title: 'short title', body: '2 short lines', source: 'source name', source_url: 'url', slide_headline: '2-5 words all caps', slide_subline: 'under 6 words', slide_stat: 'real stat or empty' },
-        { title: 'CTA title', body: 'action step + follow @aibyvineet', source: '', source_url: '', slide_headline: 'SAVE THIS NOW', slide_subline: '@aibyvineet', slide_stat: '' }
+        { title: 'short title', body: '1 short line', source: 'source name', source_url: 'url', slide_headline: '2-5 words all caps', slide_subline: 'under 5 words', slide_stat: 'real stat or empty', visual_prompt: 'dense cinematic visual metaphor, no text instructions' },
+        { title: 'short title', body: '1 short line', source: 'source name', source_url: 'url', slide_headline: '2-5 words all caps', slide_subline: 'under 5 words', slide_stat: 'real stat or empty', visual_prompt: 'dense cinematic visual metaphor, no text instructions' },
+        { title: 'short title', body: '1 short line', source: 'source name', source_url: 'url', slide_headline: '2-5 words all caps', slide_subline: 'under 5 words', slide_stat: 'real stat or empty', visual_prompt: 'dense cinematic visual metaphor, no text instructions' },
+        { title: 'short title', body: '1 short line', source: 'source name', source_url: 'url', slide_headline: '2-5 words all caps', slide_subline: 'under 5 words', slide_stat: 'real stat or empty', visual_prompt: 'dense cinematic visual metaphor, no text instructions' },
+        { title: 'CTA title', body: 'action step + follow @aibyvineet', source: '', source_url: '', slide_headline: 'SAVE THIS NOW', slide_subline: 'FOLLOW @aibyvineet', slide_stat: '', visual_prompt: 'premium save-worthy final slide with futuristic archive, bookmark, or vault visual' }
       ],
       caption: '150 chars max',
       cta: 'one CTA',

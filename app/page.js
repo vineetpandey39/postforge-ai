@@ -87,13 +87,20 @@ export default function PostForge() {
 
   async function generateImages() {
     if (!output?.slides?.length) return;
-    setImageStatus('Generating carousel images...');
+    setImageStatus('Generating 6 high-engagement carousel images...');
     setImages([]);
     try {
       const res = await fetch('/api/carousel-images', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hook: output.hook, cover_text: output.cover_text, cover_subtext: output.cover_subtext, slides: output.slides, pillarId: pillar.id })
+        body: JSON.stringify({
+          hook: output.hook,
+          cover_text: output.cover_text,
+          cover_subtext: output.cover_subtext,
+          cover_visual_prompt: output.cover_visual_prompt,
+          slides: output.slides,
+          pillarId: pillar.id
+        })
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Image generation failed');
@@ -172,7 +179,7 @@ export default function PostForge() {
                 <p style={{ whiteSpace: 'pre-wrap', color: '#CBD5E1' }}>{s.body}</p>
                 {s.source_url && <a href={s.source_url} target="_blank" rel="noreferrer" style={{ color: '#60A5FA', fontSize: 12 }}>{s.source}</a>}
               </div>)}
-              <Button onClick={generateImages} style={{ marginTop: 14 }}>Generate Carousel Images</Button>
+              <Button onClick={generateImages} style={{ marginTop: 14 }}>Generate 6 Viral Carousel Images</Button>
               {imageStatus && <p style={{ color: '#CBD5E1' }}>{imageStatus}</p>}
             </>}
 
