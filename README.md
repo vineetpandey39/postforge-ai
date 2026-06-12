@@ -1,4 +1,4 @@
-# PostForge AI — Fixed Build
+# PostForge AI - Fixed Build
 
 A safer Instagram content generator for @aibyvineet.
 
@@ -24,6 +24,6 @@ Add your keys in `.env.local`.
 
 ## Environment variables
 
-- `OPENAI_API_KEY` — required for refresh and image generation.
-- `ANTHROPIC_API_KEY` — required for post generation.
-- Optional: `ANTHROPIC_MODEL` — default: `claude-sonnet-4-20250514`.
+- `OPENAI_API_KEY` - required for refresh and image generation.
+- `ANTHROPIC_API_KEY` - required for post generation.
+- Optional: `ANTHROPIC_MODEL` - default: `claude-sonnet-4-6`.

@@ -45,6 +45,8 @@ const FORMAT_CONFIG = {
   }
 };
 
+const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6';
+
 export async function POST(request) {
   try {
     const { selectedItems, pillarFull, pillarId = 'news', format = 'Carousel' } = await request.json();
@@ -54,7 +56,7 @@ export async function POST(request) {
     requireVerifiedItems(selectedItems);
 
     const config = FORMAT_CONFIG[format] || FORMAT_CONFIG.Carousel;
-    const model = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514';
+    const model = process.env.ANTHROPIC_MODEL || DEFAULT_ANTHROPIC_MODEL;
     const context = selectedItems.map((item, i) => `${i + 1}. ${item.headline}\nSource: ${item.source}\nDate: ${item.date}\nURL: ${item.url}\nSummary: ${item.summary}`).join('\n\n');
 
     const res = await fetch('https://api.anthropic.com/v1/messages', {
