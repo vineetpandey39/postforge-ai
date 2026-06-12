@@ -43,8 +43,8 @@ Text discipline:
       caption: '150 chars max',
       cta: 'one CTA',
       canva_brief: 'one visual direction sentence',
-      hashtags: '20-30 relevant hashtags',
-      hashtag_strategy: 'one sentence'
+      hashtags: 'exactly 5 different relevant Instagram hashtags, space-separated, no generic spam',
+      hashtag_strategy: 'one sentence explaining why these 5 hashtags fit this post'
     }
   },
   'Reel Script': {
@@ -62,6 +62,22 @@ Text discipline:
 };
 
 const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6';
+
+function normalizeFiveHashtags(value, pillarId) {
+  const tags = String(value || '')
+    .match(/#[a-zA-Z0-9_]+/g)
+    ?.map(tag => tag.toLowerCase()) || [];
+  const fallbackByPillar = {
+    news: ['#ainews', '#aitools', '#technews', '#aiforcreators', '#futureofwork'],
+    tool: ['#aitools', '#aiautomation', '#productivitytools', '#creatorstack', '#buildinpublic'],
+    income: ['#aiincome', '#creatorbusiness', '#digitalincome', '#sidehustleideas', '#aiforcreators'],
+    transformation: ['#aiforcreators', '#futureofwork', '#creatormindset', '#worksmart', '#digitalcreator'],
+    automation: ['#aiautomation', '#workflowautomation', '#nocodetools', '#creatorstack', '#aitools']
+  };
+  const fallback = fallbackByPillar[pillarId] || fallbackByPillar.news;
+  const unique = [...new Set(tags)];
+  return [...unique, ...fallback.filter(tag => !unique.includes(tag))].slice(0, 5).join(' ');
+}
 
 export async function POST(request) {
   try {
@@ -85,7 +101,7 @@ export async function POST(request) {
       body: JSON.stringify({
         model,
         max_tokens: 1800,
-        system: 'You are a factual Instagram growth strategist. Use ONLY the provided verified sources. Never fabricate product names, earnings, dates, prices, statistics, claims, or source URLs. Return only valid JSON.',
+        system: 'You are a factual Instagram growth strategist. Use ONLY the provided verified sources. Never fabricate product names, earnings, dates, prices, statistics, claims, or source URLs. Hashtags must be exactly 5, relevant to this post, and varied each generation. Return only valid JSON.',
         messages: [{
           role: 'user',
           content: `Format: ${format}\nPillar: ${pillarFull}\nFocus: ${PILLAR_FOCUS[pillarId] || ''}\nInstructions: ${config.instructions}\n\nVerified sources:\n${context}\n\nReturn exactly this JSON shape, adapted with real content only:\n${JSON.stringify(config.schema, null, 2)}`
@@ -101,6 +117,7 @@ export async function POST(request) {
     const data = await res.json();
     const text = (data.content || []).find(block => block.type === 'text')?.text || '';
     const parsed = extractJson(text, 'object');
+    parsed.hashtags = normalizeFiveHashtags(parsed.hashtags, pillarId);
     return jsonResponse({ ...parsed, _format: format, _verified_sources: selectedItems.map(({ source, headline, url, date }) => ({ source, headline, url, date })) });
   } catch (error) {
     return jsonResponse({ error: error.message }, 500);

@@ -27,3 +27,7 @@ Add your keys in `.env.local`.
 - `OPENAI_API_KEY` - required for refresh and image generation.
 - `ANTHROPIC_API_KEY` - required for post generation.
 - Optional: `ANTHROPIC_MODEL` - default: `claude-sonnet-4-6`.
+- `BLOB_READ_WRITE_TOKEN` - required to upload generated carousel images to public URLs for Instagram posting.
+- `INSTAGRAM_ACCESS_TOKEN` - required for Instagram Graph API publishing.
+- `INSTAGRAM_BUSINESS_ACCOUNT_ID` - required Instagram professional account ID.
+- Optional: `META_GRAPH_VERSION` - default: `v23.0`.

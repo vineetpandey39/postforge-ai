@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import './globals.css';
 import { FORMATS, PILLARS } from './lib/validation';
 
-const HASHTAGS_FALLBACK = '#AIIncome #AITools #AIAutomation #AIForCreators #MakeMoneyWithAI #FutureOfWork #ContentCreator #SideHustle';
+const HASHTAGS_FALLBACK = '#AItools #AIautomation #AIforcreators #buildinpublic #creatorbusiness';
 
 function Card({ children, style }) {
   return <div style={{ background: 'rgba(255,255,255,0.045)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 16, ...style }}>{children}</div>;
@@ -26,6 +26,8 @@ export default function PostForge() {
   const [output, setOutput] = useState(null);
   const [images, setImages] = useState([]);
   const [imageStatus, setImageStatus] = useState('');
+  const [posting, setPosting] = useState(false);
+  const [postStatus, setPostStatus] = useState('');
   const [copied, setCopied] = useState('');
 
   const currentItems = useMemo(() => items[pillar.id] || [], [items, pillar.id]);
@@ -37,6 +39,7 @@ export default function PostForge() {
     setOutput(null);
     setImages([]);
     setImageStatus('');
+    setPostStatus('');
     setStatus('Refresh live verified content to begin.');
   }
 
@@ -44,6 +47,7 @@ export default function PostForge() {
     setLoading(true);
     setOutput(null);
     setImages([]);
+    setPostStatus('');
     setSelected([]);
     setStatus(`Searching verified sources for ${pillar.full}...`);
     try {
@@ -105,9 +109,40 @@ export default function PostForge() {
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Image generation failed');
       setImages(data.images || []);
+      setPostStatus('');
       setImageStatus(`${data.successCount}/${data.totalCount} images generated.`);
     } catch (error) {
       setImageStatus(error.message);
+    }
+  }
+
+  async function postToInstagram() {
+    const imageUrls = images.filter(img => img.success && img.imageUrl).map(img => img.imageUrl);
+    if (imageUrls.length < 2) {
+      setPostStatus('Instagram posting needs public image URLs. Add BLOB_READ_WRITE_TOKEN in Vercel and regenerate images.');
+      return;
+    }
+
+    setPosting(true);
+    setPostStatus('Publishing carousel to Instagram...');
+    try {
+      const res = await fetch('/api/instagram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageUrls,
+          caption: output?.caption || '',
+          cta: output?.cta || '',
+          hashtags: output?.hashtags || HASHTAGS_FALLBACK
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Instagram publishing failed');
+      setPostStatus(data.permalink ? `Published: ${data.permalink}` : `Published to Instagram. Media ID: ${data.id}`);
+    } catch (error) {
+      setPostStatus(`Instagram publish failed: ${error.message}`);
+    } finally {
+      setPosting(false);
     }
   }
 
@@ -197,6 +232,12 @@ export default function PostForge() {
 
       {!!images.length && <Card style={{ marginTop: 16 }}>
         <h2 style={{ marginTop: 0 }}>Carousel Images</h2>
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
+          <Button onClick={postToInstagram} disabled={posting || !images.some(img => img.imageUrl)}>
+            {posting ? 'Posting...' : 'Post Carousel to Instagram'}
+          </Button>
+          {postStatus && <span style={{ color: postStatus.includes('failed') || postStatus.includes('needs') ? '#FCA5A5' : '#86EFAC' }}>{postStatus}</span>}
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14 }}>
           {images.map(img => <div key={img.index}>
             <div style={{ color: '#CBD5E1', marginBottom: 6 }}>{img.label}</div>

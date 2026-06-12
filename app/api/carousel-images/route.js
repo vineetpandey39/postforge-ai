@@ -1,3 +1,4 @@
+import { put } from '@vercel/blob';
 import { jsonResponse } from '../../lib/validation';
 
 export const maxDuration = 300;
@@ -75,6 +76,20 @@ async function generateImage(apiKey, prompt) {
   return `data:image/png;base64,${b64}`;
 }
 
+async function uploadImage(dataUrl, index) {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) return null;
+
+  const base64 = dataUrl.replace(/^data:image\/png;base64,/, '');
+  const buffer = Buffer.from(base64, 'base64');
+  const filename = `postforge/carousels/${Date.now()}-${index}.png`;
+  const blob = await put(filename, buffer, {
+    access: 'public',
+    contentType: 'image/png'
+  });
+
+  return blob.url;
+}
+
 export async function POST(request) {
   try {
     const apiKey = process.env.OPENAI_API_KEY;
@@ -105,7 +120,8 @@ export async function POST(request) {
     for (const p of prompts) {
       try {
         const image = await generateImage(apiKey, p.prompt);
-        results.push({ index: p.index, label: p.label, image, success: true });
+        const imageUrl = await uploadImage(image, p.index);
+        results.push({ index: p.index, label: p.label, image, imageUrl, success: true });
       } catch (error) {
         results.push({ index: p.index, label: p.label, error: error.message, success: false });
       }
