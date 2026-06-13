@@ -1,7 +1,114 @@
 import { jsonResponse } from '../../lib/validation';
 
-export async function POST() {
-  return jsonResponse({
-    error: 'Direct Canva creation is disabled in this fixed build because Canva MCP cannot be reliably called from this standard server route. Use the generated slide text/images, or connect Canva using its official OAuth + Autofill API with a fillable brand template.'
-  }, 501);
+export const maxDuration = 120;
+
+function clean(value) {
+  return String(value || '').trim().replace(/^['"]|['"]$/g, '');
+}
+
+function text(value, max = 180) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function getCanvaData({ hook, cover_text, cover_subtext, slides = [], caption = '', cta = '', hashtags = '' }) {
+  const data = {
+    cover_headline: { type: 'text', text: text(cover_text || hook, 80) },
+    cover_subline: { type: 'text', text: text(cover_subtext || 'Swipe to unlock', 60) },
+    handle: { type: 'text', text: '@aibyvineet' },
+    caption: { type: 'text', text: text(caption, 500) },
+    cta: { type: 'text', text: text(cta, 180) },
+    hashtags: { type: 'text', text: text(hashtags, 180) }
+  };
+
+  slides.slice(0, 5).forEach((slide, index) => {
+    const n = index + 1;
+    data[`slide_${n}_role`] = { type: 'text', text: text(slide.role || `slide ${n}`, 40) };
+    data[`slide_${n}_headline`] = { type: 'text', text: text(slide.slide_headline || slide.title, 80) };
+    data[`slide_${n}_subline`] = { type: 'text', text: text(slide.slide_subline || slide.body, 90) };
+    data[`slide_${n}_stat`] = { type: 'text', text: text(slide.slide_stat || '', 40) };
+  });
+
+  return data;
+}
+
+function isPending(status) {
+  return ['in_progress', 'pending', 'running'].includes(String(status || '').toLowerCase());
+}
+
+function isDone(status) {
+  return ['success', 'completed', 'complete'].includes(String(status || '').toLowerCase());
+}
+
+async function canvaFetch(path, { method = 'GET', token, body } = {}) {
+  const res = await fetch(`https://api.canva.com/rest/v1${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(body ? { 'Content-Type': 'application/json' } : {})
+    },
+    ...(body ? { body: JSON.stringify(body) } : {})
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.message || data.error?.message || `Canva API failed ${res.status}`);
+  }
+  return data;
+}
+
+export async function POST(request) {
+  try {
+    const accessToken = clean(process.env.CANVA_ACCESS_TOKEN);
+    const brandTemplateId = clean(process.env.CANVA_BRAND_TEMPLATE_ID);
+
+    const body = await request.json();
+    const canvaData = getCanvaData(body);
+
+    if (!accessToken || !brandTemplateId) {
+      return jsonResponse({
+        error: 'Canva Autofill needs CANVA_ACCESS_TOKEN and CANVA_BRAND_TEMPLATE_ID in Vercel.',
+        setup: [
+          'Create a Canva brand template with text fields named cover_headline, cover_subline, handle, slide_1_headline through slide_5_headline, slide_1_subline through slide_5_subline, slide_1_stat through slide_5_stat, caption, cta, and hashtags.',
+          'Generate a Canva Connect access token with design:content:write and design:meta:read scopes.',
+          'Add CANVA_ACCESS_TOKEN and CANVA_BRAND_TEMPLATE_ID to Vercel, then redeploy.'
+        ],
+        canvaPrompt: `Create a 6-page Instagram carousel using a premium high-retention creator template. Use bold layered visuals, minimal text, strong contrast, and a curiosity arc. Cover: ${text(body.cover_text || body.hook)}. Slides: ${(body.slides || []).map(s => text(s.slide_headline || s.title, 50)).join(' | ')}. Add @aibyvineet at the bottom of every page.`,
+        dataFields: canvaData
+      }, 400);
+    }
+
+    const created = await canvaFetch('/autofills', {
+      method: 'POST',
+      token: accessToken,
+      body: {
+        brand_template_id: brandTemplateId,
+        data: canvaData
+      }
+    });
+
+    const jobId = created.job?.id || created.id;
+    if (!jobId) throw new Error('Canva did not return an autofill job ID.');
+
+    let job = created.job || created;
+    for (let attempt = 0; attempt < 12 && isPending(job.status); attempt += 1) {
+      await new Promise(resolve => setTimeout(resolve, 1800));
+      const polled = await canvaFetch(`/autofills/${jobId}`, { token: accessToken });
+      job = polled.job || polled;
+    }
+
+    if (!isDone(job.status)) {
+      return jsonResponse({ error: job.error?.message || `Canva autofill job is ${job.status}.`, jobId, job }, 502);
+    }
+
+    const design = job.result?.design;
+    return jsonResponse({
+      success: true,
+      jobId,
+      design,
+      editUrl: design?.urls?.edit_url || design?.url,
+      viewUrl: design?.urls?.view_url || design?.url,
+      thumbnailUrl: design?.thumbnail?.url || null
+    });
+  } catch (error) {
+    return jsonResponse({ error: error.message }, 500);
+  }
 }

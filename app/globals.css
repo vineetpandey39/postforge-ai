@@ -216,6 +216,13 @@ select {
 .btn.strong { background: linear-gradient(135deg, #10b981, #2563eb); }
 .btn.secondary { background: rgba(255, 255, 255, .075); }
 
+.link-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
 .metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(120px, 1fr));
@@ -250,6 +257,7 @@ select {
 }
 
 .status.error { color: #fca5a5; }
+.small-note.error { color: #fca5a5; }
 
 .workspace {
   display: grid;
@@ -372,6 +380,40 @@ select {
   padding: 12px;
 }
 
+.canva-card {
+  display: grid;
+  grid-template-columns: minmax(180px, 280px) 1fr;
+  gap: 18px;
+  align-items: start;
+  border: 1px solid rgba(255, 255, 255, .09);
+  background: rgba(255, 255, 255, .045);
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.canva-card img {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, .1);
+}
+
+.canva-card h3 {
+  margin: 0 0 8px;
+  font-size: 22px;
+}
+
+.canva-card p,
+.canva-card li {
+  color: #cbd5e1;
+  line-height: 1.5;
+}
+
+.canva-card a {
+  display: inline-flex;
+  margin: 4px 14px 10px 0;
+  font-weight: 800;
+}
+
 .image-card img {
   width: 100%;
   border-radius: 12px;
@@ -385,6 +427,7 @@ select {
   .topbar { flex-direction: column; }
   .hero-visual { min-width: 100%; width: 100%; }
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .canva-card { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 560px) {

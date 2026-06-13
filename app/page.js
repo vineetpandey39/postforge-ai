@@ -49,6 +49,8 @@ export default function PostForge() {
   const [images, setImages] = useState([]);
   const [imageStatus, setImageStatus] = useState('');
   const [assetMode, setAssetMode] = useState('ai');
+  const [canvaStatus, setCanvaStatus] = useState('');
+  const [canvaResult, setCanvaResult] = useState(null);
   const [posting, setPosting] = useState(false);
   const [postStatus, setPostStatus] = useState('');
   const [copied, setCopied] = useState('');
@@ -56,12 +58,15 @@ export default function PostForge() {
   const currentItems = useMemo(() => items[pillar.id] || [], [items, pillar.id]);
   const selectedItems = currentItems.filter(item => selected.includes(item.id));
   const publishReady = images.filter(img => img.success && img.imageUrl).length;
+  const hasReadyAssets = !!images.length || assetMode === 'canva' || !!canvaStatus;
 
   function resetWorkspace(nextStatus = `Refresh verified sources for this ${PILLAR_FRESHNESS_DAYS[pillar.id] || 7}-day window.`) {
     setSelected([]);
     setOutput(null);
     setImages([]);
     setImageStatus('');
+    setCanvaStatus('');
+    setCanvaResult(null);
     setPostStatus('');
     setStatus(nextStatus);
   }
@@ -104,6 +109,8 @@ export default function PostForge() {
     setOutput(null);
     setImages([]);
     setImageStatus('');
+    setCanvaStatus('');
+    setCanvaResult(null);
     setPostStatus('');
     try {
       const res = await fetch('/api/generate', {
@@ -125,7 +132,10 @@ export default function PostForge() {
     if (!output?.slides?.length) return;
     setImageStatus('Generating 6 high-engagement carousel images...');
     setImages([]);
+    setCanvaStatus('');
+    setCanvaResult(null);
     setPostStatus('');
+    setAssetMode('ai');
     try {
       const res = await fetch('/api/carousel-images', {
         method: 'POST',
@@ -176,6 +186,40 @@ export default function PostForge() {
       setImageStatus(`${data.successCount}/${data.totalCount} editable SVG template images generated.`);
     } catch (error) {
       setImageStatus(error.message);
+    }
+  }
+
+  async function createCanvaDesign() {
+    if (!output?.slides?.length) return;
+    setAssetMode('canva');
+    setCanvaStatus('Creating an editable Canva carousel from the generated content...');
+    setCanvaResult(null);
+    setImages([]);
+    setImageStatus('');
+    setPostStatus('');
+    try {
+      const res = await fetch('/api/canva', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hook: output.hook,
+          cover_text: output.cover_text,
+          cover_subtext: output.cover_subtext,
+          slides: output.slides,
+          caption: output.caption,
+          cta: output.cta,
+          hashtags: output.hashtags || HASHTAGS_FALLBACK
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setCanvaResult(data);
+        throw new Error(data.error || 'Canva design creation failed');
+      }
+      setCanvaResult(data);
+      setCanvaStatus('Editable Canva design created. Open it, tune the visual template, then export if you want a manual backup.');
+    } catch (error) {
+      setCanvaStatus(`Canva failed: ${error.message}`);
     }
   }
 
@@ -360,9 +404,10 @@ export default function PostForge() {
                   ))}
                   <div className="asset-actions">
                     <Button onClick={() => { setAssetMode('ai'); generateImages(); }}>Generate AI Images</Button>
-                    <Button variant="secondary" onClick={generateTemplateImages}>Generate Template Backup</Button>
+                    <Button variant="secondary" onClick={createCanvaDesign}>Create Editable Canva</Button>
                   </div>
                   {imageStatus && <p className="small-note">{imageStatus}</p>}
+                  {canvaStatus && <p className={`small-note ${canvaStatus.includes('failed') ? 'error' : ''}`}>{canvaStatus}</p>}
                 </div>
               )}
 
@@ -385,34 +430,59 @@ export default function PostForge() {
         </Panel>
       </section>
 
-      {!!images.length && (
+      {hasReadyAssets && (
         <Panel className="image-panel">
           <div className="panel-head">
             <div>
               <p className="eyebrow">Ready assets</p>
-              <h2>{assetMode === 'template' ? 'Template Backup' : 'Carousel Images'}</h2>
+              <h2>{assetMode === 'canva' ? 'Canva Design' : assetMode === 'template' ? 'Template Backup' : 'Carousel Images'}</h2>
             </div>
             {assetMode === 'ai' ? (
               <Button onClick={postToInstagram} disabled={posting || publishReady < 2} variant="strong">
                 {posting ? 'Posting...' : 'Post Carousel to Instagram'}
               </Button>
+            ) : assetMode === 'canva' && canvaResult?.editUrl ? (
+              <a className="btn strong link-btn" href={canvaResult.editUrl} target="_blank" rel="noreferrer">Open in Canva</a>
             ) : (
-              <span className="small-note">SVG backup for download/editing. Use AI images for direct Instagram posting.</span>
+              <span className="small-note">Editable backup route. Use AI images for direct Instagram posting.</span>
             )}
           </div>
 
           {postStatus && <p className={`status ${postStatus.includes('failed') || postStatus.includes('needs') ? 'error' : ''}`}>{postStatus}</p>}
 
-          <div className="image-grid">
-            {images.map(img => (
-              <article key={img.index} className="image-card">
-                <span>{img.label}</span>
-                {img.success ? <img src={img.image} alt={img.label} /> : <p className="status error">{img.error}</p>}
-                {img.uploadError && <p className="status error">Public URL not created. Use a public Vercel Blob store for Instagram posting.</p>}
-                {img.success && <Button variant="secondary" onClick={() => downloadAsset(img)}>Download {img.type === 'template' ? 'SVG' : 'PNG'}</Button>}
-              </article>
-            ))}
-          </div>
+          {assetMode === 'canva' ? (
+            <div className="canva-card">
+              {canvaResult?.thumbnailUrl && <img src={canvaResult.thumbnailUrl} alt="Canva design preview" />}
+              <div>
+                <span className="eyebrow">Editable route</span>
+                <h3>{canvaResult?.editUrl ? 'Your Canva carousel is ready' : 'Canva setup needed'}</h3>
+                <p>{canvaStatus || 'Create an editable Canva design from the generated carousel copy.'}</p>
+                {canvaResult?.editUrl && <a href={canvaResult.editUrl} target="_blank" rel="noreferrer">Open editable design</a>}
+                {canvaResult?.viewUrl && <a href={canvaResult.viewUrl} target="_blank" rel="noreferrer">View design</a>}
+                {canvaResult?.setup && (
+                  <ul>
+                    {canvaResult.setup.map(step => <li key={step}>{step}</li>)}
+                  </ul>
+                )}
+                {canvaResult?.canvaPrompt && (
+                  <Button variant="secondary" onClick={() => copy(canvaResult.canvaPrompt, 'canvaPrompt')}>
+                    {copied === 'canvaPrompt' ? 'Copied Canva prompt' : 'Copy Canva fallback prompt'}
+                  </Button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="image-grid">
+              {images.map(img => (
+                <article key={img.index} className="image-card">
+                  <span>{img.label}</span>
+                  {img.success ? <img src={img.image} alt={img.label} /> : <p className="status error">{img.error}</p>}
+                  {img.uploadError && <p className="status error">Public URL not created. Use a public Vercel Blob store for Instagram posting.</p>}
+                  {img.success && <Button variant="secondary" onClick={() => downloadAsset(img)}>Download {img.type === 'template' ? 'SVG' : 'PNG'}</Button>}
+                </article>
+              ))}
+            </div>
+          )}
         </Panel>
       )}
     </main>
