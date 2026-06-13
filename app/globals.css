@@ -361,6 +361,15 @@ select {
   margin: 6px 0;
 }
 
+.arc-step b {
+  color: #eef2ff;
+}
+
+.feature-step {
+  border-color: rgba(16, 185, 129, .35);
+  background: rgba(16, 185, 129, .08);
+}
+
 .caption-box {
   display: grid;
   gap: 14px;

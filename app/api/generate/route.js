@@ -51,8 +51,36 @@ Text discipline:
     }
   },
   'Reel Script': {
-    instructions: 'Create a 30-45 second Reel script with timestamps. Use only selected sources.',
-    schema: { hook: 'max 12 words', script_segments: [{ timestamp: '0-3s', visual: 'visual', voiceover: 'exact words', source: 'source', source_url: 'url' }], caption: 'short caption', cta: 'CTA', music_suggestion: 'BGM mood', hashtags: 'hashtags', hashtag_strategy: 'strategy' }
+    instructions: `Create a faceless 22-35 second Instagram Reel script that feels viral from frame 1.
+
+Reel strategy:
+- First 0-2 seconds must create instant pattern interrupt: danger, secret, shocking proof, or "you missed this" energy.
+- Do not start with "Today we are talking about". Start with the consequence.
+- Use fast cuts every 2-4 seconds.
+- Every segment needs: visual, on_screen_text, voiceover, edit_note, source, source_url.
+- Keep voiceover punchy and conversational in Hinglish-friendly English, but do not use slang that harms clarity.
+- Make it faceless: use AI-generated B-roll, UI mockups, source proof cards, kinetic text, charts, laptop/phone scenes, and abstract product visuals.
+- Use only selected sources. Do not invent product names, benchmarks, dates, numbers, or claims.
+- End with a save/follow CTA tied to why the viewer should remember this.`,
+    schema: {
+      hook: 'max 10 words, frame-one retention hook',
+      reel_angle: 'one sentence describing why viewers should care now',
+      cold_open_visual: 'exact first frame visual direction',
+      script_segments: [
+        { timestamp: '0-2s', beat: 'pattern interrupt', on_screen_text: '3-7 words', visual: 'faceless visual direction', voiceover: 'exact words', edit_note: 'cut/motion/caption instruction', source: 'source', source_url: 'url' },
+        { timestamp: '2-6s', beat: 'context', on_screen_text: '3-7 words', visual: 'faceless visual direction', voiceover: 'exact words', edit_note: 'cut/motion/caption instruction', source: 'source', source_url: 'url' },
+        { timestamp: '6-12s', beat: 'proof', on_screen_text: '3-7 words', visual: 'faceless visual direction', voiceover: 'exact words', edit_note: 'cut/motion/caption instruction', source: 'source', source_url: 'url' },
+        { timestamp: '12-20s', beat: 'meaning', on_screen_text: '3-7 words', visual: 'faceless visual direction', voiceover: 'exact words', edit_note: 'cut/motion/caption instruction', source: 'source', source_url: 'url' },
+        { timestamp: '20-30s', beat: 'creator move', on_screen_text: '3-7 words', visual: 'faceless visual direction', voiceover: 'exact words', edit_note: 'cut/motion/caption instruction', source: 'source', source_url: 'url' },
+        { timestamp: '30-35s', beat: 'save CTA', on_screen_text: '3-7 words', visual: 'faceless visual direction', voiceover: 'exact words', edit_note: 'cut/motion/caption instruction', source: '', source_url: '' }
+      ],
+      shot_list: ['5-7 short AI image/video scene prompts for faceless B-roll'],
+      caption: 'short caption, 150 chars max',
+      cta: 'one save/follow/comment CTA',
+      music_suggestion: 'manual Instagram audio mood, not a specific copyrighted song',
+      hashtags: 'exactly 5 different relevant Instagram hashtags, space-separated',
+      hashtag_strategy: 'one sentence explaining why these 5 hashtags fit this reel'
+    }
   },
   'Story Hook': {
     instructions: 'Create a 4-frame Instagram Story sequence with poll/question sticker ideas.',

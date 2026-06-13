@@ -34,6 +34,13 @@ function itemAge(item) {
   return `${item.ageDays} days old`;
 }
 
+function reelCopy(output) {
+  if (!output?.script_segments?.length) return '';
+  return output.script_segments
+    .map(segment => `${segment.timestamp} ${segment.beat || ''}\nOn-screen: ${segment.on_screen_text || ''}\nVoiceover: ${segment.voiceover || ''}\nVisual: ${segment.visual || ''}\nEdit: ${segment.edit_note || ''}`)
+    .join('\n\n');
+}
+
 export default function PostForge() {
   const [pillar, setPillar] = useState(PILLARS[0]);
   const [format, setFormat] = useState('Carousel');
@@ -381,7 +388,11 @@ export default function PostForge() {
               <p className="eyebrow">Creation plan</p>
               <h2>Generated Output</h2>
             </div>
-            {output && <Button variant="secondary" onClick={() => copy(output.hook, 'hook')}>{copied === 'hook' ? 'Copied' : 'Copy hook'}</Button>}
+            {output && (
+              <Button variant="secondary" onClick={() => copy(output.script_segments ? reelCopy(output) : output.hook, output.script_segments ? 'reel' : 'hook')}>
+                {copied === 'reel' ? 'Copied script' : copied === 'hook' ? 'Copied' : output.script_segments ? 'Copy script' : 'Copy hook'}
+              </Button>
+            )}
           </div>
 
           {!output && (
@@ -414,6 +425,61 @@ export default function PostForge() {
                   </div>
                   {imageStatus && <p className="small-note">{imageStatus}</p>}
                   {canvaStatus && <p className={`small-note ${canvaStatus.includes('failed') ? 'error' : ''}`}>{canvaStatus}</p>}
+                </div>
+              )}
+
+              {output.script_segments && (
+                <div className="story-arc reel-script">
+                  {output.reel_angle && (
+                    <article className="arc-step feature-step">
+                      <span>Reel angle</span>
+                      <strong>{output.reel_angle}</strong>
+                      {output.cold_open_visual && <p>{output.cold_open_visual}</p>}
+                    </article>
+                  )}
+                  {output.script_segments.map((s, i) => (
+                    <article key={i} className="arc-step">
+                      <span>{s.timestamp} / {s.beat || 'beat'}</span>
+                      <strong>{s.on_screen_text || s.visual}</strong>
+                      {s.voiceover && <p><b>Voiceover:</b> {s.voiceover}</p>}
+                      {s.visual && <p><b>Visual:</b> {s.visual}</p>}
+                      {s.edit_note && <p><b>Edit:</b> {s.edit_note}</p>}
+                      {s.source_url && <a href={s.source_url} target="_blank" rel="noreferrer">{s.source || 'Open source'}</a>}
+                    </article>
+                  ))}
+                  {output.shot_list?.length && (
+                    <article className="arc-step">
+                      <span>Faceless B-roll prompts</span>
+                      {output.shot_list.map((shot, i) => <p key={i}>{i + 1}. {shot}</p>)}
+                    </article>
+                  )}
+                  {output.music_suggestion && (
+                    <article className="arc-step">
+                      <span>Audio mood</span>
+                      <strong>{output.music_suggestion}</strong>
+                    </article>
+                  )}
+                </div>
+              )}
+
+              {output.stories && (
+                <div className="story-arc">
+                  {output.stories.map((s, i) => (
+                    <article key={i} className="arc-step">
+                      <span>Story {s.story_number || i + 1} / {s.type}</span>
+                      <strong>{s.text_overlay}</strong>
+                      {s.visual_direction && <p>{s.visual_direction}</p>}
+                      {s.sticker_suggestion && <p><b>Sticker:</b> {s.sticker_suggestion}</p>}
+                      {s.source_url && <a href={s.source_url} target="_blank" rel="noreferrer">{s.source || 'Open source'}</a>}
+                    </article>
+                  ))}
+                </div>
+              )}
+
+              {output.caption_body && (
+                <div className="hook-card">
+                  <span>Caption body</span>
+                  <p>{output.caption_body}</p>
                 </div>
               )}
 
