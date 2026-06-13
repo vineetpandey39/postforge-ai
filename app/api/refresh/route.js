@@ -13,6 +13,26 @@ const QUERIES = {
   automation: `AI automation workflow case study time saved cost saved published in the last 90 days credible source`
 };
 
+const TARGETED_QUERIES = {
+  news: [
+    'Anthropic Claude official AI news announcement last 7 days',
+    'Google Gemini DeepMind AI announcement last 7 days',
+    'Meta AI Llama announcement last 7 days',
+    'Microsoft Copilot AI announcement last 7 days',
+    'OpenAI official AI announcement last 7 days',
+    'Perplexity Mistral Cohere Runway ElevenLabs AI announcement last 7 days',
+    'Reuters The Verge TechCrunch latest artificial intelligence company news last 7 days'
+  ],
+  tool: [
+    'Anthropic Claude AI tool update launch last 14 days',
+    'Google Gemini AI tool update launch last 14 days',
+    'Meta AI Llama AI tool update launch last 14 days',
+    'Microsoft Copilot AI tool update launch last 14 days',
+    'OpenAI ChatGPT Codex AI tool update launch last 14 days',
+    'Perplexity Mistral Cohere Runway ElevenLabs AI tool launch last 14 days'
+  ]
+};
+
 const COMPANY_ALIASES = [
   ['anthropic', ['anthropic', 'claude']],
   ['openai', ['openai', 'chatgpt', 'codex']],
@@ -53,6 +73,16 @@ function diversifyItems(items, limit = 6, perCompany = 2) {
   return [...diverse, ...overflow].slice(0, limit);
 }
 
+function uniqueItems(items) {
+  const seen = new Set();
+  return items.filter(item => {
+    const key = `${String(item.url || '').toLowerCase()}|${String(item.headline || '').toLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 async function repairSearchJson({ openaiKey, rawText, pillarFull, since, today }) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -83,6 +113,43 @@ async function repairSearchJson({ openaiKey, rawText, pillarFull, since, today }
   return Array.isArray(parsed) ? parsed : parsed.items || [];
 }
 
+async function fetchCandidates({ openaiKey, query, pillarFull, since, today, limit = 6 }) {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${openaiKey}`
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-search-preview',
+      web_search_options: {},
+      messages: [
+        {
+          role: 'system',
+          content: `You are a strict fact-checking researcher for an Instagram AI content tool. Today is ${today}. Return only real, source-backed items published from ${since} through ${today}. For news/tool tabs prefer official announcements and reputable publications. Do not include rumors, fictional model names, unverified claims, recycled old launches, undated posts, or articles outside this date window. Return raw JSON only.`
+        },
+        {
+          role: 'user',
+          content: `Search query: ${query}\n\nReturn up to ${limit} candidate items for "${pillarFull}". Each item must be JSON with: id, tag, company, date, source, headline, summary, url, verified.\nRules:\n- url must be the exact article/source URL.\n- date must be the actual publish/announcement date, not today's date unless actually published today.\n- verified must be true only if the claim is supported by the URL.\n- If fewer reliable items exist, return fewer.\n- Return ONLY a JSON array.`
+        }
+      ]
+    })
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`OpenAI refresh failed ${res.status}: ${err.slice(0, 240)}`);
+  }
+
+  const data = await res.json();
+  const text = data.choices?.[0]?.message?.content || '';
+  try {
+    return extractJson(text, 'array');
+  } catch {
+    return repairSearchJson({ openaiKey, rawText: text, pillarFull, since, today });
+  }
+}
+
 export async function POST(request) {
   try {
     const { pillar = 'news', pillarFull = 'AI Content' } = await request.json();
@@ -93,43 +160,11 @@ export async function POST(request) {
     const today = now.toISOString().slice(0, 10);
     const freshnessDays = PILLAR_FRESHNESS_DAYS[pillar] || FRESHNESS_DAYS;
     const since = new Date(now.getTime() - freshnessDays * 86400000).toISOString().slice(0, 10);
-    const query = QUERIES[pillar] || QUERIES.news;
-
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${openaiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-search-preview',
-        web_search_options: {},
-        messages: [
-          {
-            role: 'system',
-            content: `You are a strict fact-checking researcher for an Instagram AI content tool. Today is ${today}. Return only real, source-backed items published from ${since} through ${today}. For news/tool tabs prefer announcements across the whole AI market: Anthropic/Claude, Google/Gemini, Meta/Llama, Microsoft/Copilot, xAI/Grok, Perplexity, Mistral, Cohere, Runway, ElevenLabs, Stability AI, and OpenAI. Do not over-sample OpenAI; use at most 2 items from any one company unless there are no other fresh verified items. For income/transformation/automation prefer credible source-backed case studies, reports, and real examples. Do not include rumors, fictional model names, unverified claims, recycled old launches, undated posts, or articles outside this date window. Prefer primary sources and reputable publications. Return raw JSON only.`
-          },
-          {
-            role: 'user',
-            content: `Search query: ${query}\n\nReturn up to 8 candidate items for the pillar "${pillarFull}" so the app can choose a diverse top 6. Each item must be JSON with: id, tag, company, date, source, headline, summary, url, verified.\nRules:\n- For News and Tools, include multiple AI companies when fresh verified items exist. Target 1 item each from Anthropic/Claude, Google/Gemini, Meta/Llama, Microsoft/Copilot, xAI/Grok, Perplexity, Mistral/Cohere/Runway/ElevenLabs, and OpenAI.\n- Never return more than 2 items from the same company.\n- url must be the exact article/source URL.\n- date must be the actual publish/announcement date, not today's date unless actually published today.\n- verified must be true only if the claim is supported by the URL.\n- If fewer than 6 reliable items exist, return fewer.\n- Return ONLY a JSON array.`
-          }
-        ]
-      })
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`OpenAI refresh failed ${res.status}: ${err.slice(0, 240)}`);
-    }
-
-    const data = await res.json();
-    const text = data.choices?.[0]?.message?.content || '';
-    let parsed;
-    try {
-      parsed = extractJson(text, 'array');
-    } catch {
-      parsed = await repairSearchJson({ openaiKey, rawText: text, pillarFull, since, today });
-    }
+    const queries = [QUERIES[pillar] || QUERIES.news, ...(TARGETED_QUERIES[pillar] || [])];
+    const candidateGroups = await Promise.all(
+      queries.map(query => fetchCandidates({ openaiKey, query, pillarFull, since, today, limit: pillar === 'news' || pillar === 'tool' ? 3 : 8 }).catch(() => []))
+    );
+    const parsed = uniqueItems(candidateGroups.flat());
     const normalized = parsed.map((item, index) => normalizeItem(item, index, pillar, freshnessDays));
     const items = diversifyItems(normalized.filter(item => item.verified), 6, pillar === 'news' || pillar === 'tool' ? 2 : 3);
     const staleCount = normalized.filter(item => !item.verified).length;
