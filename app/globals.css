@@ -41,6 +41,9 @@ a { color: #60a5fa; }
   border-radius: 22px;
   padding: 24px;
   margin-bottom: 16px;
+  min-height: 260px;
+  overflow: hidden;
+  position: relative;
 }
 
 .topbar h1,
@@ -58,6 +61,71 @@ a { color: #60a5fa; }
   margin: 8px 0 0;
   line-height: 1.5;
 }
+
+.hero-badges {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+
+.hero-badges span {
+  border: 1px solid rgba(255, 255, 255, .12);
+  background: rgba(255, 255, 255, .07);
+  border-radius: 999px;
+  color: #dbeafe;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 8px 11px;
+}
+
+.hero-visual {
+  position: relative;
+  min-width: 340px;
+  height: 210px;
+}
+
+.hero-visual::before {
+  content: "";
+  position: absolute;
+  inset: 26px 20px 10px;
+  background:
+    linear-gradient(135deg, rgba(16, 185, 129, .2), rgba(37, 99, 235, .26)),
+    radial-gradient(circle at 50% 30%, rgba(255, 255, 255, .18), transparent 42%);
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 28px;
+  transform: rotate(-4deg);
+}
+
+.floating-card {
+  position: absolute;
+  display: grid;
+  gap: 6px;
+  width: 170px;
+  min-height: 116px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  background: rgba(5, 10, 18, .86);
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .32);
+}
+
+.floating-card span {
+  color: #8ea3ff;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .08em;
+}
+
+.floating-card strong {
+  color: #fff;
+  line-height: 1.05;
+  font-size: 24px;
+}
+
+.card-a { left: 10px; top: 22px; transform: rotate(-7deg); }
+.card-b { right: 16px; top: 10px; transform: rotate(5deg); }
+.card-c { left: 92px; bottom: 10px; transform: rotate(2deg); }
 
 .eyebrow {
   margin: 0 0 8px;
@@ -96,6 +164,12 @@ a { color: #60a5fa; }
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.asset-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
 .panel-head {
@@ -309,6 +383,7 @@ select {
   .topbar,
   .workspace { grid-template-columns: 1fr; }
   .topbar { flex-direction: column; }
+  .hero-visual { min-width: 100%; width: 100%; }
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
@@ -317,4 +392,6 @@ select {
   .btn,
   select { width: 100%; }
   .action-row { align-items: stretch; }
+  .asset-actions { grid-template-columns: 1fr; }
+  .hero-visual { display: none; }
 }

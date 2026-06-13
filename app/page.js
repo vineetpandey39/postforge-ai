@@ -48,6 +48,7 @@ export default function PostForge() {
   const [output, setOutput] = useState(null);
   const [images, setImages] = useState([]);
   const [imageStatus, setImageStatus] = useState('');
+  const [assetMode, setAssetMode] = useState('ai');
   const [posting, setPosting] = useState(false);
   const [postStatus, setPostStatus] = useState('');
   const [copied, setCopied] = useState('');
@@ -151,6 +152,33 @@ export default function PostForge() {
     }
   }
 
+  async function generateTemplateImages() {
+    if (!output?.slides?.length) return;
+    setImageStatus('Generating editable template backup...');
+    setImages([]);
+    setPostStatus('');
+    setAssetMode('template');
+    try {
+      const res = await fetch('/api/template-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hook: output.hook,
+          cover_text: output.cover_text,
+          cover_subtext: output.cover_subtext,
+          slides: output.slides,
+          pillarId: pillar.id
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Template generation failed');
+      setImages(data.images || []);
+      setImageStatus(`${data.successCount}/${data.totalCount} editable SVG template images generated.`);
+    } catch (error) {
+      setImageStatus(error.message);
+    }
+  }
+
   async function postToInstagram() {
     const imageUrls = images.filter(img => img.success && img.imageUrl).map(img => img.imageUrl);
     if (imageUrls.length < 2) {
@@ -196,6 +224,11 @@ export default function PostForge() {
     document.body.removeChild(a);
   }
 
+  function downloadAsset(img) {
+    const extension = img.type === 'template' ? 'svg' : 'png';
+    download(img.image, `postforge-slide-${img.index + 1}.${extension}`);
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -203,8 +236,27 @@ export default function PostForge() {
           <p className="eyebrow">Verified AI content cockpit</p>
           <h1>PostForge AI</h1>
           <p className="subhead">Find fresh sources, generate a curiosity-led carousel, create images, and publish to Instagram.</p>
+          <div className="hero-badges">
+            <span>🔎 Fresh sources</span>
+            <span>🧲 Curiosity arc</span>
+            <span>🎨 AI + template assets</span>
+            <span>🚀 Instagram ready</span>
+          </div>
         </div>
-        <div className="trust-pill">Fresh verified sources</div>
+        <div className="hero-visual" aria-hidden="true">
+          <div className="floating-card card-a">
+            <span>HOOK</span>
+            <strong>THE GAP IS HERE</strong>
+          </div>
+          <div className="floating-card card-b">
+            <span>PROOF</span>
+            <strong>5 SOURCES</strong>
+          </div>
+          <div className="floating-card card-c">
+            <span>POST</span>
+            <strong>@aibyvineet</strong>
+          </div>
+        </div>
       </header>
 
       <Panel className="control-panel">
@@ -306,7 +358,10 @@ export default function PostForge() {
                       {s.source_url && <a href={s.source_url} target="_blank" rel="noreferrer">{s.source}</a>}
                     </article>
                   ))}
-                  <Button onClick={generateImages}>Generate 6 Viral Carousel Images</Button>
+                  <div className="asset-actions">
+                    <Button onClick={() => { setAssetMode('ai'); generateImages(); }}>Generate AI Images</Button>
+                    <Button variant="secondary" onClick={generateTemplateImages}>Generate Template Backup</Button>
+                  </div>
                   {imageStatus && <p className="small-note">{imageStatus}</p>}
                 </div>
               )}
@@ -335,11 +390,15 @@ export default function PostForge() {
           <div className="panel-head">
             <div>
               <p className="eyebrow">Ready assets</p>
-              <h2>Carousel Images</h2>
+              <h2>{assetMode === 'template' ? 'Template Backup' : 'Carousel Images'}</h2>
             </div>
-            <Button onClick={postToInstagram} disabled={posting || publishReady < 2} variant="strong">
-              {posting ? 'Posting...' : 'Post Carousel to Instagram'}
-            </Button>
+            {assetMode === 'ai' ? (
+              <Button onClick={postToInstagram} disabled={posting || publishReady < 2} variant="strong">
+                {posting ? 'Posting...' : 'Post Carousel to Instagram'}
+              </Button>
+            ) : (
+              <span className="small-note">SVG backup for download/editing. Use AI images for direct Instagram posting.</span>
+            )}
           </div>
 
           {postStatus && <p className={`status ${postStatus.includes('failed') || postStatus.includes('needs') ? 'error' : ''}`}>{postStatus}</p>}
@@ -350,7 +409,7 @@ export default function PostForge() {
                 <span>{img.label}</span>
                 {img.success ? <img src={img.image} alt={img.label} /> : <p className="status error">{img.error}</p>}
                 {img.uploadError && <p className="status error">Public URL not created. Use a public Vercel Blob store for Instagram posting.</p>}
-                {img.success && <Button variant="secondary" onClick={() => download(img.image, `postforge-slide-${img.index + 1}.png`)}>Download</Button>}
+                {img.success && <Button variant="secondary" onClick={() => downloadAsset(img)}>Download {img.type === 'template' ? 'SVG' : 'PNG'}</Button>}
               </article>
             ))}
           </div>
