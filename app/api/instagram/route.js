@@ -4,6 +4,20 @@ export const maxDuration = 120;
 
 const GRAPH_VERSION = process.env.META_GRAPH_VERSION || 'v23.0';
 
+function cleanEnvValue(value) {
+  return String(value || '')
+    .trim()
+    .replace(/^['"]|['"]$/g, '')
+    .replace(/^INSTAGRAM_ACCESS_TOKEN\s*=\s*/i, '')
+    .replace(/^Bearer\s+/i, '')
+    .replace(/\s+/g, '');
+}
+
+function tokenHint(token) {
+  if (!token) return 'missing';
+  return `length ${token.length}, starts ${token.slice(0, 4)}, ends ${token.slice(-4)}`;
+}
+
 function getFiveHashtags(value) {
   const tags = String(value || '')
     .match(/#[a-zA-Z0-9_]+/g)
@@ -37,8 +51,8 @@ async function graphGet(path, params) {
 
 export async function POST(request) {
   try {
-    const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
-    const igUserId = process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID || process.env.INSTAGRAM_USER_ID;
+    const accessToken = cleanEnvValue(process.env.INSTAGRAM_ACCESS_TOKEN);
+    const igUserId = cleanEnvValue(process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID || process.env.INSTAGRAM_USER_ID);
 
     if (!accessToken) return jsonResponse({ error: 'INSTAGRAM_ACCESS_TOKEN is not configured.' }, 500);
     if (!igUserId) return jsonResponse({ error: 'INSTAGRAM_BUSINESS_ACCOUNT_ID is not configured.' }, 500);
@@ -87,6 +101,9 @@ export async function POST(request) {
 
     return jsonResponse({ success: true, id: published.id, permalink, hashtags: finalHashtags });
   } catch (error) {
-    return jsonResponse({ error: error.message }, 500);
+    const message = error.message.includes('Cannot parse access token')
+      ? `${error.message}. Check Vercel has only the raw Page access token value, then redeploy. Token seen by server: ${tokenHint(cleanEnvValue(process.env.INSTAGRAM_ACCESS_TOKEN))}.`
+      : error.message;
+    return jsonResponse({ error: message }, 500);
   }
 }
