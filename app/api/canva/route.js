@@ -31,6 +31,14 @@ function getCanvaData({ hook, cover_text, cover_subtext, slides = [], caption = 
   return data;
 }
 
+function filterCanvaData(data, fields = []) {
+  if (!Array.isArray(fields) || !fields.length) return data;
+  return fields.reduce((filtered, field) => {
+    if (data[field]) filtered[field] = data[field];
+    return filtered;
+  }, {});
+}
+
 function parseTemplatePool() {
   const rawPool = clean(process.env.CANVA_TEMPLATE_POOL);
   const legacyId = clean(process.env.CANVA_BRAND_TEMPLATE_ID);
@@ -48,7 +56,8 @@ function parseTemplatePool() {
           : {
               id: clean(template.id || template.templateId || template.brand_template_id),
               name: text(template.name || `Canva template ${index + 1}`, 80),
-              style: text(template.style || template.category || 'mixed', 80)
+              style: text(template.style || template.category || 'mixed', 80),
+              fields: Array.isArray(template.fields) ? template.fields.map(clean).filter(Boolean) : []
             })
         .filter(template => template.id);
     }
@@ -99,9 +108,9 @@ export async function POST(request) {
   try {
     const accessToken = clean(process.env.CANVA_ACCESS_TOKEN);
     const body = await request.json();
-    const canvaData = getCanvaData(body);
     const templatePool = parseTemplatePool();
     const selectedTemplate = pickTemplate(templatePool, clean(body.avoidTemplateId));
+    const canvaData = filterCanvaData(getCanvaData(body), selectedTemplate?.fields);
 
     if (!accessToken || !selectedTemplate) {
       return jsonResponse({
