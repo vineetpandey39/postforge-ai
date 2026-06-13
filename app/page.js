@@ -41,6 +41,43 @@ function reelCopy(output) {
     .join('\n\n');
 }
 
+function segmentDurationMs(timestamp, fallback = 3600) {
+  const nums = String(timestamp || '').match(/\d+/g)?.map(Number) || [];
+  if (nums.length >= 2 && nums[1] > nums[0]) {
+    return Math.min(6500, Math.max(1800, (nums[1] - nums[0]) * 1000));
+  }
+  return fallback;
+}
+
+function loadCanvasImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = src;
+  });
+}
+
+function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 4) {
+  const words = String(text || '').split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = '';
+
+  words.forEach(word => {
+    const next = line ? `${line} ${word}` : word;
+    if (ctx.measureText(next).width > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  });
+
+  if (line) lines.push(line);
+  lines.slice(0, maxLines).forEach((row, index) => ctx.fillText(row, x, y + index * lineHeight));
+  return Math.min(lines.length, maxLines) * lineHeight;
+}
+
 export default function PostForge() {
   const [pillar, setPillar] = useState(PILLARS[0]);
   const [format, setFormat] = useState('Carousel');
@@ -62,11 +99,15 @@ export default function PostForge() {
   const [posting, setPosting] = useState(false);
   const [postStatus, setPostStatus] = useState('');
   const [copied, setCopied] = useState('');
+  const [reelAssets, setReelAssets] = useState([]);
+  const [reelStatus, setReelStatus] = useState('');
+  const [reelVideoUrl, setReelVideoUrl] = useState('');
+  const [renderingReel, setRenderingReel] = useState(false);
 
   const currentItems = useMemo(() => items[pillar.id] || [], [items, pillar.id]);
   const selectedItems = currentItems.filter(item => selected.includes(item.id));
   const publishReady = images.filter(img => img.success && img.imageUrl).length;
-  const hasReadyAssets = !!images.length || assetMode === 'canva' || !!canvaStatus;
+  const hasReadyAssets = !!images.length || !!reelAssets.length || assetMode === 'canva' || !!canvaStatus;
 
   function resetWorkspace(nextStatus = `Refresh verified sources for this ${PILLAR_FRESHNESS_DAYS[pillar.id] || 7}-day window.`) {
     setSelected([]);
@@ -77,6 +118,9 @@ export default function PostForge() {
     setCanvaResult(null);
     setLastCanvaTemplateId('');
     setPostStatus('');
+    setReelAssets([]);
+    setReelStatus('');
+    setReelVideoUrl('');
     setStatus(nextStatus);
   }
 
@@ -122,6 +166,9 @@ export default function PostForge() {
     setCanvaResult(null);
     setLastCanvaTemplateId('');
     setPostStatus('');
+    setReelAssets([]);
+    setReelStatus('');
+    setReelVideoUrl('');
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
@@ -169,6 +216,135 @@ export default function PostForge() {
       }
     } catch (error) {
       setImageStatus(error.message);
+    }
+  }
+
+  async function generateReelAssets() {
+    if (!output?.script_segments?.length) return;
+    setAssetMode('reel');
+    setReelStatus('Generating faceless vertical Reel scenes...');
+    setReelAssets([]);
+    setReelVideoUrl('');
+    setImages([]);
+    setImageStatus('');
+    setCanvaStatus('');
+    setCanvaResult(null);
+    setPostStatus('');
+    try {
+      const res = await fetch('/api/reel-assets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ output, pillarId: pillar.id })
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Reel asset generation failed');
+      setReelAssets(data.assets || []);
+      setReelStatus(`${data.successCount}/${data.totalCount} faceless Reel scenes generated. Render a preview when ready.`);
+    } catch (error) {
+      setReelStatus(`Reel assets failed: ${error.message}`);
+    }
+  }
+
+  async function renderReelPreview() {
+    const readyAssets = reelAssets.filter(asset => asset.success && asset.image);
+    if (!readyAssets.length) return;
+    if (!window.MediaRecorder) {
+      setReelStatus('Your browser does not support MediaRecorder. Download the scene assets and edit in CapCut/Canva.');
+      return;
+    }
+
+    setRenderingReel(true);
+    setReelVideoUrl('');
+    setReelStatus('Rendering vertical Reel preview in your browser...');
+
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1080;
+      canvas.height = 1920;
+      const ctx = canvas.getContext('2d');
+      const stream = canvas.captureStream(30);
+      const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+        ? 'video/webm;codecs=vp9'
+        : 'video/webm';
+      const recorder = new MediaRecorder(stream, { mimeType });
+      const chunks = [];
+      recorder.ondataavailable = event => {
+        if (event.data?.size) chunks.push(event.data);
+      };
+
+      const finished = new Promise(resolve => {
+        recorder.onstop = () => {
+          const blob = new Blob(chunks, { type: 'video/webm' });
+          resolve(URL.createObjectURL(blob));
+        };
+      });
+
+      recorder.start();
+
+      for (const asset of readyAssets) {
+        const image = await loadCanvasImage(asset.image);
+        const duration = segmentDurationMs(asset.timestamp);
+        const start = performance.now();
+        let elapsed = 0;
+
+        while (elapsed < duration) {
+          elapsed = performance.now() - start;
+          const progress = Math.min(1, elapsed / duration);
+          const scale = 1.08 + progress * 0.06;
+          const drawW = canvas.width * scale;
+          const drawH = (image.height / image.width) * drawW;
+          const drawX = (canvas.width - drawW) / 2;
+          const drawY = (canvas.height - drawH) / 2 - progress * 28;
+
+          ctx.fillStyle = '#05070d';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(image, drawX, drawY, drawW, drawH);
+
+          const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+          gradient.addColorStop(0, 'rgba(0,0,0,.68)');
+          gradient.addColorStop(.34, 'rgba(0,0,0,.12)');
+          gradient.addColorStop(.72, 'rgba(0,0,0,.22)');
+          gradient.addColorStop(1, 'rgba(0,0,0,.78)');
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+          ctx.fillStyle = 'rgba(8,12,22,.78)';
+          ctx.strokeStyle = 'rgba(255,255,255,.16)';
+          ctx.lineWidth = 3;
+          ctx.roundRect(70, 1060, 940, 440, 34);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.fillStyle = '#8ea3ff';
+          ctx.font = '900 34px Arial';
+          ctx.fillText(String(asset.label || 'REEL SCENE').toUpperCase().slice(0, 42), 78, 96);
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '900 86px Arial';
+          wrapCanvasText(ctx, asset.on_screen_text || 'WATCH THIS', 80, 220, 920, 92, 4);
+
+          ctx.fillStyle = '#dbeafe';
+          ctx.font = '700 42px Arial';
+          wrapCanvasText(ctx, asset.voiceover || '', 105, 1140, 870, 56, 5);
+
+          ctx.fillStyle = '#ffffff';
+          ctx.font = '900 38px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText('@aibyvineet', canvas.width / 2, 1815);
+          ctx.textAlign = 'left';
+
+          await new Promise(requestAnimationFrame);
+        }
+      }
+
+      recorder.stop();
+      const url = await finished;
+      setReelVideoUrl(url);
+      setReelStatus('Reel preview rendered. Download WebM, then add trending audio manually in Instagram/CapCut.');
+    } catch (error) {
+      setReelStatus(`Reel render failed: ${error.message}`);
+    } finally {
+      setRenderingReel(false);
     }
   }
 
@@ -459,6 +635,13 @@ export default function PostForge() {
                       <strong>{output.music_suggestion}</strong>
                     </article>
                   )}
+                  <div className="asset-actions">
+                    <Button onClick={generateReelAssets}>Generate Reel Assets</Button>
+                    <Button variant="secondary" onClick={renderReelPreview} disabled={!reelAssets.some(asset => asset.success) || renderingReel}>
+                      {renderingReel ? 'Rendering...' : 'Render Reel Preview'}
+                    </Button>
+                  </div>
+                  {reelStatus && <p className={`small-note ${reelStatus.includes('failed') ? 'error' : ''}`}>{reelStatus}</p>}
                 </div>
               )}
 
@@ -507,9 +690,13 @@ export default function PostForge() {
           <div className="panel-head">
             <div>
               <p className="eyebrow">Ready assets</p>
-              <h2>{assetMode === 'canva' ? 'Canva Design' : assetMode === 'template' ? 'Template Backup' : 'Carousel Images'}</h2>
+              <h2>{assetMode === 'canva' ? 'Canva Design' : assetMode === 'template' ? 'Template Backup' : assetMode === 'reel' ? 'Reel Assets' : 'Carousel Images'}</h2>
             </div>
-            {assetMode === 'ai' ? (
+            {assetMode === 'reel' ? (
+              <Button onClick={renderReelPreview} disabled={renderingReel || !reelAssets.some(asset => asset.success)} variant="strong">
+                {renderingReel ? 'Rendering...' : 'Render Reel Preview'}
+              </Button>
+            ) : assetMode === 'ai' ? (
               <Button onClick={postToInstagram} disabled={posting || publishReady < 2} variant="strong">
                 {posting ? 'Posting...' : 'Post Carousel to Instagram'}
               </Button>
@@ -522,7 +709,26 @@ export default function PostForge() {
 
           {postStatus && <p className={`status ${postStatus.includes('failed') || postStatus.includes('needs') ? 'error' : ''}`}>{postStatus}</p>}
 
-          {assetMode === 'canva' ? (
+          {assetMode === 'reel' ? (
+            <div className="reel-maker">
+              {reelVideoUrl && (
+                <div className="reel-preview">
+                  <video src={reelVideoUrl} controls playsInline />
+                  <a className="btn strong link-btn" href={reelVideoUrl} download="postforge-reel-preview.webm">Download Reel Preview</a>
+                </div>
+              )}
+              <div className="image-grid">
+                {reelAssets.map(asset => (
+                  <article key={asset.index} className="image-card">
+                    <span>{asset.label}</span>
+                    {asset.success ? <img src={asset.image} alt={asset.label} /> : <p className="status error">{asset.error}</p>}
+                    {asset.voiceover && <p className="small-note">{asset.voiceover}</p>}
+                    {asset.success && <Button variant="secondary" onClick={() => download(asset.image, `postforge-reel-scene-${asset.index + 1}.png`)}>Download Scene</Button>}
+                  </article>
+                ))}
+              </div>
+            </div>
+          ) : assetMode === 'canva' ? (
             <div className="canva-card">
               {canvaResult?.thumbnailUrl && <img src={canvaResult.thumbnailUrl} alt="Canva design preview" />}
               <div>
