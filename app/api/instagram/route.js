@@ -53,6 +53,30 @@ async function graphGet(baseUrl, path, params) {
   return data;
 }
 
+async function waitForContainer(baseUrl, containerId, accessToken, label) {
+  let lastStatus = 'UNKNOWN';
+  let lastError = '';
+
+  for (let attempt = 0; attempt < 18; attempt += 1) {
+    const container = await graphGet(baseUrl, containerId, {
+      fields: 'status_code,status',
+      access_token: accessToken
+    });
+
+    lastStatus = container.status_code || container.status || 'UNKNOWN';
+    lastError = container.status || '';
+
+    if (lastStatus === 'FINISHED' || lastStatus === 'PUBLISHED') return container;
+    if (lastStatus === 'ERROR' || lastStatus === 'EXPIRED') {
+      throw new Error(`${label} processing failed: ${lastError || lastStatus}`);
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 2500));
+  }
+
+  throw new Error(`${label} is still processing on Instagram. Try posting again in a minute. Last status: ${lastStatus}`);
+}
+
 export async function POST(request) {
   try {
     const accessToken = cleanEnvValue(process.env.INSTAGRAM_ACCESS_TOKEN);
@@ -72,21 +96,25 @@ export async function POST(request) {
     const finalCaption = [caption, cta, finalHashtags].filter(Boolean).join('\n\n').slice(0, 2200);
 
     const children = [];
-    for (const imageUrl of urls) {
+    for (const [index, imageUrl] of urls.entries()) {
       const child = await graphPost(baseUrl, `${igUserId}/media`, {
         image_url: imageUrl,
         is_carousel_item: 'true',
         access_token: accessToken
       });
-      children.push(child.id);
+      children.push({ id: child.id, label: `Carousel image ${index + 1}` });
     }
+
+    await Promise.all(children.map(child => waitForContainer(baseUrl, child.id, accessToken, child.label)));
 
     const carousel = await graphPost(baseUrl, `${igUserId}/media`, {
       media_type: 'CAROUSEL',
-      children: children.join(','),
+      children: children.map(child => child.id).join(','),
       caption: finalCaption,
       access_token: accessToken
     });
+
+    await waitForContainer(baseUrl, carousel.id, accessToken, 'Carousel container');
 
     const published = await graphPost(baseUrl, `${igUserId}/media_publish`, {
       creation_id: carousel.id,
