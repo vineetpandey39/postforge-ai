@@ -110,6 +110,35 @@ function normalizeFiveHashtags(value, pillarId) {
   return [...unique, ...fallback.filter(tag => !unique.includes(tag))].slice(0, 5).join(' ');
 }
 
+async function repairJson({ apiKey, model, rawText, schema }) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01'
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 1800,
+      system: 'Convert malformed JSON-like text into valid JSON only. Do not add facts, claims, sources, or fields not present in the input/schema. Return one valid JSON object and nothing else.',
+      messages: [{
+        role: 'user',
+        content: `Schema to match:\n${JSON.stringify(schema, null, 2)}\n\nMalformed text:\n${String(rawText || '').slice(0, 12000)}`
+      }]
+    })
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`JSON repair failed ${res.status}: ${err.slice(0, 180)}`);
+  }
+
+  const data = await res.json();
+  const repaired = (data.content || []).find(block => block.type === 'text')?.text || '';
+  return extractJson(repaired, 'object');
+}
+
 export async function POST(request) {
   try {
     const { selectedItems, pillarFull, pillarId = 'news', format = 'Carousel' } = await request.json();
@@ -147,7 +176,12 @@ export async function POST(request) {
 
     const data = await res.json();
     const text = (data.content || []).find(block => block.type === 'text')?.text || '';
-    const parsed = extractJson(text, 'object');
+    let parsed;
+    try {
+      parsed = extractJson(text, 'object');
+    } catch {
+      parsed = await repairJson({ apiKey, model, rawText: text, schema: config.schema });
+    }
     parsed.hashtags = normalizeFiveHashtags(parsed.hashtags, pillarId);
     return jsonResponse({ ...parsed, _format: format, _verified_sources: selectedItems.map(({ source, headline, url, date }) => ({ source, headline, url, date })) });
   } catch (error) {
