@@ -53,6 +53,36 @@ function diversifyItems(items, limit = 6, perCompany = 2) {
   return [...diverse, ...overflow].slice(0, limit);
 }
 
+async function repairSearchJson({ openaiKey, rawText, pillarFull, since, today }) {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${openaiKey}`
+    },
+    body: JSON.stringify({
+      model: 'gpt-4.1-mini',
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'system',
+          content: `Convert the supplied research text into strict JSON only. Return {"items":[...]} with only source-backed items published from ${since} through ${today}. If the text has no reliable items, return {"items":[]}.`
+        },
+        {
+          role: 'user',
+          content: `Pillar: ${pillarFull}\n\nResearch text:\n${String(rawText || '').slice(0, 12000)}\n\nEach item needs: id, tag, company, date, source, headline, summary, url, verified.`
+        }
+      ]
+    })
+  });
+
+  if (!res.ok) return [];
+  const data = await res.json();
+  const content = data.choices?.[0]?.message?.content || '{"items":[]}';
+  const parsed = JSON.parse(content);
+  return Array.isArray(parsed) ? parsed : parsed.items || [];
+}
+
 export async function POST(request) {
   try {
     const { pillar = 'news', pillarFull = 'AI Content' } = await request.json();
@@ -94,7 +124,12 @@ export async function POST(request) {
 
     const data = await res.json();
     const text = data.choices?.[0]?.message?.content || '';
-    const parsed = extractJson(text, 'array');
+    let parsed;
+    try {
+      parsed = extractJson(text, 'array');
+    } catch {
+      parsed = await repairSearchJson({ openaiKey, rawText: text, pillarFull, since, today });
+    }
     const normalized = parsed.map((item, index) => normalizeItem(item, index, pillar, freshnessDays));
     const items = diversifyItems(normalized.filter(item => item.verified), 6, pillar === 'news' || pillar === 'tool' ? 2 : 3);
     const staleCount = normalized.filter(item => !item.verified).length;

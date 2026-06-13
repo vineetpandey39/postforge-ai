@@ -24,8 +24,15 @@ export function extractJson(text, type = 'object') {
   const clean = String(text || '').replace(/```json|```/g, '').trim();
   const regex = type === 'array' ? /\[[\s\S]*\]/ : /\{[\s\S]*\}/;
   const match = clean.match(regex);
-  if (!match) throw new Error('Model did not return valid JSON.');
-  return JSON.parse(match[0]);
+  if (match) return JSON.parse(match[0]);
+  if (type === 'array') {
+    const objectMatch = clean.match(/\{[\s\S]*\}/);
+    if (objectMatch) {
+      const parsed = JSON.parse(objectMatch[0]);
+      if (Array.isArray(parsed.items)) return parsed.items;
+    }
+  }
+  throw new Error('Model did not return valid JSON.');
 }
 
 export function isValidHttpUrl(value) {
