@@ -93,6 +93,19 @@ Reel strategy:
 };
 
 const DEFAULT_ANTHROPIC_MODEL = 'claude-sonnet-4-6';
+const GENERATION_TOOL = {
+  name: 'return_postforge_generation',
+  description: 'Return the completed PostForge content object using only the verified source material.',
+  input_schema: {
+    type: 'object',
+    additionalProperties: true
+  }
+};
+
+function getToolInput(data) {
+  const block = (data.content || []).find(part => part.type === 'tool_use' && part.name === GENERATION_TOOL.name);
+  return block?.input || null;
+}
 
 function normalizeFiveHashtags(value, pillarId) {
   const tags = String(value || '')
@@ -120,8 +133,10 @@ async function repairJson({ apiKey, model, rawText, schema }) {
     },
     body: JSON.stringify({
       model,
-      max_tokens: 1800,
-      system: 'Convert malformed JSON-like text into valid JSON only. Do not add facts, claims, sources, or fields not present in the input/schema. Return one valid JSON object and nothing else.',
+      max_tokens: 4000,
+      system: 'Convert malformed JSON-like text into one structured object. Do not add facts, claims, sources, or fields not present in the input/schema.',
+      tools: [GENERATION_TOOL],
+      tool_choice: { type: 'tool', name: GENERATION_TOOL.name },
       messages: [{
         role: 'user',
         content: `Schema to match:\n${JSON.stringify(schema, null, 2)}\n\nMalformed text:\n${String(rawText || '').slice(0, 12000)}`
@@ -135,6 +150,9 @@ async function repairJson({ apiKey, model, rawText, schema }) {
   }
 
   const data = await res.json();
+  const toolInput = getToolInput(data);
+  if (toolInput) return toolInput;
+
   const repaired = (data.content || []).find(block => block.type === 'text')?.text || '';
   return extractJson(repaired, 'object');
 }
@@ -160,8 +178,10 @@ export async function POST(request) {
       },
       body: JSON.stringify({
         model,
-        max_tokens: 1800,
-        system: 'You are a factual Instagram growth strategist. Use ONLY the provided verified sources. Never fabricate product names, earnings, dates, prices, statistics, claims, or source URLs. Hashtags must be exactly 5, relevant to this post, and varied each generation. Return only valid JSON.',
+        max_tokens: 4000,
+        system: 'You are a factual Instagram growth strategist. Use ONLY the provided verified sources. Never fabricate product names, earnings, dates, prices, statistics, claims, or source URLs. Hashtags must be exactly 5, relevant to this post, and varied each generation. Return the final content only through the provided tool.',
+        tools: [GENERATION_TOOL],
+        tool_choice: { type: 'tool', name: GENERATION_TOOL.name },
         messages: [{
           role: 'user',
           content: `Format: ${format}\nPillar: ${pillarFull}\nFocus: ${PILLAR_FOCUS[pillarId] || ''}\nInstructions: ${config.instructions}\n\nVerified sources:\n${context}\n\nReturn exactly this JSON shape, adapted with real content only:\n${JSON.stringify(config.schema, null, 2)}`
@@ -175,12 +195,14 @@ export async function POST(request) {
     }
 
     const data = await res.json();
-    const text = (data.content || []).find(block => block.type === 'text')?.text || '';
-    let parsed;
-    try {
-      parsed = extractJson(text, 'object');
-    } catch {
-      parsed = await repairJson({ apiKey, model, rawText: text, schema: config.schema });
+    let parsed = getToolInput(data);
+    if (!parsed) {
+      const text = (data.content || []).find(block => block.type === 'text')?.text || '';
+      try {
+        parsed = extractJson(text, 'object');
+      } catch {
+        parsed = await repairJson({ apiKey, model, rawText: text, schema: config.schema });
+      }
     }
     parsed.hashtags = normalizeFiveHashtags(parsed.hashtags, pillarId);
     return jsonResponse({ ...parsed, _format: format, _verified_sources: selectedItems.map(({ source, headline, url, date }) => ({ source, headline, url, date })) });
