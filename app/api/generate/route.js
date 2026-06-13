@@ -25,7 +25,8 @@ Required story arc:
 
 Text discipline:
 - Image text must be minimal: headline 2-5 words, subline under 5 words, optional stat only if real.
-- Never put paragraphs on images. The visual metaphor should carry the density.
+- Slide 1 stays minimal. Slides 2-5 need one short image_body_text insight, 14-24 words, that explains the actual point in plain English.
+- Never put long paragraphs on images. The visual metaphor should carry the density, while the image_body_text carries the key context.
 - Each visual_prompt must mention the exact subject, source event, tool/company/person, and the slide role so the image cannot become generic.
 - Each body must contain the real context behind the image in one short sentence.
 - Every factual claim must trace back to selected sources.
@@ -36,11 +37,11 @@ Text discipline:
       cover_subtext: 'max 4 words or empty',
       cover_visual_prompt: 'one sentence describing a cinematic dense viral visual metaphor for the cover',
       slides: [
-        { role: 'problem', title: 'short title', body: 'real context in 1 short sentence', source: 'source name', source_url: 'url', slide_headline: '2-5 words all caps', slide_subline: 'under 5 words', slide_stat: 'real stat or empty', visual_prompt: 'specific visual prompt tied to the actual subject and problem', content_brief: 'what this slide must communicate visually' },
-        { role: 'proof', title: 'short title', body: 'real proof in 1 short sentence', source: 'source name', source_url: 'url', slide_headline: '2-5 words all caps', slide_subline: 'under 5 words', slide_stat: 'real stat or empty', visual_prompt: 'specific visual prompt tied to the actual verified proof', content_brief: 'what this slide must communicate visually' },
-        { role: 'reveal', title: 'short title', body: 'real mechanism in 1 short sentence', source: 'source name', source_url: 'url', slide_headline: '2-5 words all caps', slide_subline: 'under 5 words', slide_stat: 'real stat or empty', visual_prompt: 'specific visual prompt tied to the actual mechanism', content_brief: 'what this slide must communicate visually' },
-        { role: 'solution', title: 'short title', body: 'real creator move in 1 short sentence', source: 'source name or empty', source_url: 'url or empty', slide_headline: '2-5 words all caps', slide_subline: 'under 5 words', slide_stat: 'real stat or empty', visual_prompt: 'specific visual prompt tied to the actual recommended move', content_brief: 'what this slide must communicate visually' },
-        { role: 'closure', title: 'CTA title', body: 'save/follow/action step + follow @aibyvineet', source: '', source_url: '', slide_headline: 'SAVE THIS NOW', slide_subline: 'FOLLOW @aibyvineet', slide_stat: '', visual_prompt: 'specific save-worthy final visual tied to the carousel topic', content_brief: 'what the viewer should remember and save' }
+        { role: 'problem', title: 'short title', body: 'real context in 1 short sentence', image_body_text: '14-24 words, exact text for the image insight panel', source: 'source name', source_url: 'url', slide_headline: '2-5 words all caps', slide_subline: 'under 5 words', slide_stat: 'real stat or empty', visual_prompt: 'specific visual prompt tied to the actual subject and problem', content_brief: 'what this slide must communicate visually' },
+        { role: 'proof', title: 'short title', body: 'real proof in 1 short sentence', image_body_text: '14-24 words, exact text for the image insight panel', source: 'source name', source_url: 'url', slide_headline: '2-5 words all caps', slide_subline: 'under 5 words', slide_stat: 'real stat or empty', visual_prompt: 'specific visual prompt tied to the actual verified proof', content_brief: 'what this slide must communicate visually' },
+        { role: 'reveal', title: 'short title', body: 'real mechanism in 1 short sentence', image_body_text: '14-24 words, exact text for the image insight panel', source: 'source name', source_url: 'url', slide_headline: '2-5 words all caps', slide_subline: 'under 5 words', slide_stat: 'real stat or empty', visual_prompt: 'specific visual prompt tied to the actual mechanism', content_brief: 'what this slide must communicate visually' },
+        { role: 'solution', title: 'short title', body: 'real creator move in 1 short sentence', image_body_text: '14-24 words, exact text for the image insight panel', source: 'source name or empty', source_url: 'url or empty', slide_headline: '2-5 words all caps', slide_subline: 'under 5 words', slide_stat: 'real stat or empty', visual_prompt: 'specific visual prompt tied to the actual recommended move', content_brief: 'what this slide must communicate visually' },
+        { role: 'closure', title: 'CTA title', body: 'save/follow/action step + follow @aibyvineet', image_body_text: '10-18 words, save/follow reason for the image insight panel', source: '', source_url: '', slide_headline: 'SAVE THIS NOW', slide_subline: 'FOLLOW @aibyvineet', slide_stat: '', visual_prompt: 'specific save-worthy final visual tied to the carousel topic', content_brief: 'what the viewer should remember and save' }
       ],
       caption: '150 chars max',
       cta: 'one CTA',

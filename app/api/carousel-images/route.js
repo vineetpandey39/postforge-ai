@@ -53,6 +53,29 @@ function safeText(value, fallback = '') {
   return String(value || fallback).replace(/[{}]/g, '').replace(/\s+/g, ' ').trim().slice(0, 90);
 }
 
+function safeInsight(value, fallback = '') {
+  return String(value || fallback).replace(/[{}]/g, '').replace(/\s+/g, ' ').trim().slice(0, 260);
+}
+
+function readableInsight(value) {
+  const words = safeInsight(value).split(' ').filter(Boolean);
+  const lines = [];
+  let line = '';
+
+  words.forEach(word => {
+    const next = line ? `${line} ${word}` : word;
+    if (next.length > 38 && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  });
+
+  if (line) lines.push(line);
+  return lines.slice(0, 5).join('\n');
+}
+
 function pickPalette(pillarId, layoutIndex) {
   const palettes = PILLAR_PALETTE[pillarId] || PILLAR_PALETTE.news;
   return palettes[layoutIndex % palettes.length];
@@ -68,12 +91,17 @@ function imagePrompt({ type, role = 'proof', text, subline, stat, visual, body, 
     contentBrief ? `Must communicate visually: ${safeText(contentBrief, '').slice(0, 180)}` : '',
     source ? `Source context: ${safeText(source)}` : ''
   ].filter(Boolean).join('\n');
+  const insightCopy = readableInsight(body);
   const textRules = [
     `MAIN TEXT EXACTLY: "${safeText(text)}"`,
     subline ? `SMALL TEXT EXACTLY: "${safeText(subline)}"` : '',
+    !isCover && insightCopy ? `CONTENT CARD COPY EXACTLY, preserving line breaks: "${insightCopy}"` : '',
     stat ? `FEATURED STAT EXACTLY: "${safeText(stat)}"` : '',
     'BOTTOM HANDLE EXACTLY: "@aibyvineet"'
   ].filter(Boolean).join('; ');
+  const typography = isCover
+    ? 'huge bold condensed sans-serif, high contrast with the selected palette, minimal words only, no body paragraphs.'
+    : 'bold condensed headline plus a separate readable content card. The content card must use clean sans-serif body text at large mobile-readable size, 3-5 short lines, generous padding, and must contain the exact content card copy.';
 
   return `MASTER PROMPT FOR ${type.toUpperCase()}:
 Create a vertical 3:4 Instagram carousel image, 1024x1536.
@@ -86,10 +114,10 @@ ${factualContext || 'Use the text and visual concept as the only content source.
 Core visual concept tied to this content: ${visualSystem}.
 Composition: ${isCover
     ? 'extreme hook cover, massive curiosity, one dominant cinematic object, diagonal energy, danger/secret/reveal feeling, do not fully explain the story yet, thumbnail-readable from far away'
-    : 'follow-up story slide, dense but organized visual metaphor, one clear hero object, supporting holograms/icons/charts, each slide should advance the story and make the viewer swipe again'}.
-Typography: huge bold condensed sans-serif, high contrast with the selected palette, minimal words only, no body paragraphs.
+    : 'follow-up story slide with two locked zones: 45-55% cinematic visual zone and 45-55% clean editorial content card. Reserve the right side or bottom half as a matte glass/dark rectangle with clear empty space for text. Put the actual content card copy inside that panel, not hidden in the background. Dense visuals must support the content, not cover the text. Each slide should advance the story and make the viewer swipe again'}.
+Typography: ${typography}
 Text to render: ${textRules}.
-Strict rules: render no other words, no random labels, no fake brand logos, no invented statistics, no watermarks, no misspelled text, no clutter over the main text, keep @aibyvineet small and centered at the bottom, make the image visibly about the actual slide content rather than a generic AI poster.`;
+Strict rules: render no other words, no random labels, no fake brand logos, no invented statistics, no watermarks, no misspelled text, no clutter over the main text, keep @aibyvineet small and centered at the bottom, make the image visibly about the actual slide content rather than a generic AI poster.${isCover ? '' : ' The content card must be readable on mobile, must occupy a real reserved area, and must not be reduced to icons, abstract UI, or vague slogans. Do not make the entire slide a giant headline poster.'}`;
 }
 
 async function generateImage(apiKey, prompt) {
@@ -142,7 +170,7 @@ export async function POST(request) {
           subline: slide.slide_subline || '',
           stat: slide.slide_stat || '',
           visual: slide.visual_prompt || slide.body || '',
-          body: slide.body || '',
+          body: slide.image_body_text || slide.body || '',
           contentBrief: slide.content_brief || '',
           source: slide.source || '',
           pillarId,
