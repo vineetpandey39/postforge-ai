@@ -18,6 +18,10 @@ function tokenHint(token) {
   return `length ${token.length}, starts ${token.slice(0, 4)}, ends ${token.slice(-4)}`;
 }
 
+function graphBaseUrl(accessToken) {
+  return accessToken.startsWith('IG') ? 'https://graph.instagram.com' : 'https://graph.facebook.com';
+}
+
 function getFiveHashtags(value) {
   const tags = String(value || '')
     .match(/#[a-zA-Z0-9_]+/g)
@@ -27,8 +31,8 @@ function getFiveHashtags(value) {
   return [...unique, ...fallback.filter(tag => !unique.includes(tag))].slice(0, 5);
 }
 
-async function graphPost(path, params) {
-  const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${path}`, {
+async function graphPost(baseUrl, path, params) {
+  const res = await fetch(`${baseUrl}/${GRAPH_VERSION}/${path}`, {
     method: 'POST',
     body: new URLSearchParams(params)
   });
@@ -39,9 +43,9 @@ async function graphPost(path, params) {
   return data;
 }
 
-async function graphGet(path, params) {
+async function graphGet(baseUrl, path, params) {
   const query = new URLSearchParams(params);
-  const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${path}?${query}`);
+  const res = await fetch(`${baseUrl}/${GRAPH_VERSION}/${path}?${query}`);
   const data = await res.json();
   if (!res.ok || data.error) {
     throw new Error(data.error?.message || `Instagram API failed ${res.status}`);
@@ -56,6 +60,7 @@ export async function POST(request) {
 
     if (!accessToken) return jsonResponse({ error: 'INSTAGRAM_ACCESS_TOKEN is not configured.' }, 500);
     if (!igUserId) return jsonResponse({ error: 'INSTAGRAM_BUSINESS_ACCOUNT_ID is not configured.' }, 500);
+    const baseUrl = graphBaseUrl(accessToken);
 
     const { imageUrls = [], caption = '', cta = '', hashtags = '' } = await request.json();
     const urls = imageUrls.filter(Boolean).slice(0, 10);
@@ -68,7 +73,7 @@ export async function POST(request) {
 
     const children = [];
     for (const imageUrl of urls) {
-      const child = await graphPost(`${igUserId}/media`, {
+      const child = await graphPost(baseUrl, `${igUserId}/media`, {
         image_url: imageUrl,
         is_carousel_item: 'true',
         access_token: accessToken
@@ -76,21 +81,21 @@ export async function POST(request) {
       children.push(child.id);
     }
 
-    const carousel = await graphPost(`${igUserId}/media`, {
+    const carousel = await graphPost(baseUrl, `${igUserId}/media`, {
       media_type: 'CAROUSEL',
       children: children.join(','),
       caption: finalCaption,
       access_token: accessToken
     });
 
-    const published = await graphPost(`${igUserId}/media_publish`, {
+    const published = await graphPost(baseUrl, `${igUserId}/media_publish`, {
       creation_id: carousel.id,
       access_token: accessToken
     });
 
     let permalink = null;
     try {
-      const media = await graphGet(published.id, {
+      const media = await graphGet(baseUrl, published.id, {
         fields: 'permalink',
         access_token: accessToken
       });
@@ -99,7 +104,7 @@ export async function POST(request) {
       permalink = null;
     }
 
-    return jsonResponse({ success: true, id: published.id, permalink, hashtags: finalHashtags });
+    return jsonResponse({ success: true, id: published.id, permalink, hashtags: finalHashtags, apiHost: baseUrl });
   } catch (error) {
     const message = error.message.includes('Cannot parse access token')
       ? `${error.message}. Check Vercel has only the raw Page access token value, then redeploy. Token seen by server: ${tokenHint(cleanEnvValue(process.env.INSTAGRAM_ACCESS_TOKEN))}.`
