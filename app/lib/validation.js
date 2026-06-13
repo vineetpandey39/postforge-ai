@@ -68,6 +68,7 @@ export function normalizeItem(item, index, pillar, days = PILLAR_FRESHNESS_DAYS[
     publishedAt: freshness.publishedAt,
     ageDays: freshness.ageDays,
     freshnessDays: days,
+    company: String(item.company || '').slice(0, 80),
     source: String(item.source || '').slice(0, 80),
     headline: String(item.headline || '').slice(0, 180),
     summary: String(item.summary || '').slice(0, 600),

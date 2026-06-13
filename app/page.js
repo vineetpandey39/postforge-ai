@@ -358,6 +358,7 @@ export default function PostForge() {
               return (
                 <article key={item.id} className={`source-card ${isSelected ? 'selected' : ''}`} onClick={() => setSelected(prev => isSelected ? prev.filter(id => id !== item.id) : [...prev, item.id])}>
                   <div className="source-meta">
+                    {item.company && <span>{item.company}</span>}
                     <span>{item.source}</span>
                     <span>{item.publishedAt || item.date}</span>
                     <span className="fresh-badge">{itemAge(item)}</span>
