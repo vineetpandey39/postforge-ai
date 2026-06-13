@@ -78,6 +78,20 @@ function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 4) {
   return Math.min(lines.length, maxLines) * lineHeight;
 }
 
+function roundRect(ctx, x, y, width, height, radius) {
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + width - radius, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+  ctx.lineTo(x + width, y + height - radius);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+  ctx.lineTo(x + radius, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
+  ctx.closePath();
+}
+
 export default function PostForge() {
   const [pillar, setPillar] = useState(PILLARS[0]);
   const [format, setFormat] = useState('Carousel');
@@ -308,24 +322,27 @@ export default function PostForge() {
           ctx.fillStyle = gradient;
           ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-          ctx.fillStyle = 'rgba(8,12,22,.78)';
+          ctx.fillStyle = 'rgba(8,12,22,.74)';
           ctx.strokeStyle = 'rgba(255,255,255,.16)';
           ctx.lineWidth = 3;
-          ctx.roundRect(70, 1060, 940, 440, 34);
+          roundRect(ctx, 70, 1048, 940, 452, 34);
           ctx.fill();
           ctx.stroke();
 
-          ctx.fillStyle = '#8ea3ff';
-          ctx.font = '900 34px Arial';
-          ctx.fillText(String(asset.label || 'REEL SCENE').toUpperCase().slice(0, 42), 78, 96);
-
           ctx.fillStyle = '#ffffff';
-          ctx.font = '900 86px Arial';
-          wrapCanvasText(ctx, asset.on_screen_text || 'WATCH THIS', 80, 220, 920, 92, 4);
+          ctx.font = '900 92px Arial';
+          wrapCanvasText(ctx, asset.on_screen_text || 'WATCH THIS', 80, 170, 920, 96, 4);
 
           ctx.fillStyle = '#dbeafe';
-          ctx.font = '700 42px Arial';
-          wrapCanvasText(ctx, asset.voiceover || '', 105, 1140, 870, 56, 5);
+          ctx.font = '700 44px Arial';
+          wrapCanvasText(ctx, asset.voiceover || '', 105, 1138, 870, 58, 5);
+
+          ctx.fillStyle = 'rgba(255,255,255,.22)';
+          roundRect(ctx, 80, 1662, 920, 10, 5);
+          ctx.fill();
+          ctx.fillStyle = '#60a5fa';
+          roundRect(ctx, 80, 1662, 920 * ((readyAssets.indexOf(asset) + progress) / readyAssets.length), 10, 5);
+          ctx.fill();
 
           ctx.fillStyle = '#ffffff';
           ctx.font = '900 38px Arial';
