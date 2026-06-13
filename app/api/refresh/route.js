@@ -1,4 +1,4 @@
-import { extractJson, FRESHNESS_DAYS, jsonResponse, normalizeItem } from '../../lib/validation';
+import { extractJson, FRESHNESS_DAYS, PILLAR_FRESHNESS_DAYS, jsonResponse, normalizeItem } from '../../lib/validation';
 
 export const maxDuration = 120;
 
@@ -6,10 +6,10 @@ const SOURCE_HINTS = 'official company blog OR Reuters OR The Verge OR TechCrunc
 
 const QUERIES = {
   news: `AI company announcements and AI product news published in the last 7 days ${SOURCE_HINTS}`,
-  tool: `AI tool launches for creators automation video image coding published in the last 7 days ${SOURCE_HINTS}`,
-  income: `AI creator economy income case study with real numbers published in the last 7 days credible source`,
-  transformation: `AI workplace productivity or career transformation study published in the last 7 days credible source`,
-  automation: `AI automation workflow case study time saved cost saved published in the last 7 days credible source`
+  tool: `AI tool launches and major AI creator tool updates published in the last 14 days ${SOURCE_HINTS}`,
+  income: `AI creator economy income case study real numbers published in the last 90 days credible source`,
+  transformation: `AI workplace productivity career transformation study or report published in the last 90 days credible source`,
+  automation: `AI automation workflow case study time saved cost saved published in the last 90 days credible source`
 };
 
 export async function POST(request) {
@@ -20,7 +20,8 @@ export async function POST(request) {
 
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
-    const since = new Date(now.getTime() - FRESHNESS_DAYS * 86400000).toISOString().slice(0, 10);
+    const freshnessDays = PILLAR_FRESHNESS_DAYS[pillar] || FRESHNESS_DAYS;
+    const since = new Date(now.getTime() - freshnessDays * 86400000).toISOString().slice(0, 10);
     const query = QUERIES[pillar] || QUERIES.news;
 
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -35,7 +36,7 @@ export async function POST(request) {
         messages: [
           {
             role: 'system',
-            content: `You are a strict fact-checking researcher for an Instagram AI content tool. Today is ${today}. Return only real, source-backed items published from ${since} through ${today}. Do not include rumors, fictional model names, unverified claims, recycled old launches, undated posts, or articles outside this date window. Prefer primary sources and reputable publications. Return raw JSON only.`
+            content: `You are a strict fact-checking researcher for an Instagram AI content tool. Today is ${today}. Return only real, source-backed items published from ${since} through ${today}. For news/tool tabs prefer announcements; for income/transformation/automation prefer credible source-backed case studies, reports, and real examples. Do not include rumors, fictional model names, unverified claims, recycled old launches, undated posts, or articles outside this date window. Prefer primary sources and reputable publications. Return raw JSON only.`
           },
           {
             role: 'user',
@@ -53,15 +54,15 @@ export async function POST(request) {
     const data = await res.json();
     const text = data.choices?.[0]?.message?.content || '';
     const parsed = extractJson(text, 'array');
-    const normalized = parsed.map((item, index) => normalizeItem(item, index, pillar));
+    const normalized = parsed.map((item, index) => normalizeItem(item, index, pillar, freshnessDays));
     const items = normalized.filter(item => item.verified).slice(0, 6);
     const staleCount = normalized.filter(item => !item.verified).length;
 
     if (!items.length) {
-      return jsonResponse({ error: `No verified items from the last ${FRESHNESS_DAYS} days found. ${staleCount ? `${staleCount} stale or unverified result(s) were rejected.` : 'Try another pillar or refresh later.'}` }, 404);
+      return jsonResponse({ error: `No verified items from the last ${freshnessDays} days found. ${staleCount ? `${staleCount} stale or unverified result(s) were rejected.` : 'Try another pillar or refresh later.'}` }, 404);
     }
 
-    return jsonResponse({ items, refreshedAt: new Date().toISOString(), since, freshnessDays: FRESHNESS_DAYS, rejected: staleCount });
+    return jsonResponse({ items, refreshedAt: new Date().toISOString(), since, freshnessDays, rejected: staleCount });
   } catch (error) {
     return jsonResponse({ error: error.message }, 500);
   }

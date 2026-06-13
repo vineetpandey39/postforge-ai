@@ -8,6 +8,13 @@ export const PILLARS = [
 
 export const FORMATS = ['Carousel', 'Reel Script', 'Story Hook', 'Caption Only'];
 export const FRESHNESS_DAYS = 7;
+export const PILLAR_FRESHNESS_DAYS = {
+  news: 7,
+  tool: 14,
+  income: 90,
+  transformation: 90,
+  automation: 90
+};
 
 export function jsonResponse(payload, status = 200) {
   return Response.json(payload, { status });
@@ -52,14 +59,15 @@ export function getFreshness(itemDate, now = new Date(), days = FRESHNESS_DAYS) 
   };
 }
 
-export function normalizeItem(item, index, pillar) {
-  const freshness = getFreshness(item.date);
+export function normalizeItem(item, index, pillar, days = PILLAR_FRESHNESS_DAYS[pillar] || FRESHNESS_DAYS) {
+  const freshness = getFreshness(item.date, new Date(), days);
   const normalized = {
     id: String(item.id || `${pillar}-${Date.now()}-${index}`),
     tag: String(item.tag || 'AI').slice(0, 30),
     date: String(item.date || '').slice(0, 80),
     publishedAt: freshness.publishedAt,
     ageDays: freshness.ageDays,
+    freshnessDays: days,
     source: String(item.source || '').slice(0, 80),
     headline: String(item.headline || '').slice(0, 180),
     summary: String(item.summary || '').slice(0, 600),
@@ -83,8 +91,8 @@ export function requireVerifiedItems(items) {
   if (!Array.isArray(items) || items.length === 0) {
     throw new Error('Select at least one verified source item.');
   }
-  const invalid = items.filter(item => !item?.verified || !isValidHttpUrl(item?.url) || !getFreshness(item?.publishedAt || item?.date).fresh);
+  const invalid = items.filter(item => !item?.verified || !isValidHttpUrl(item?.url) || !getFreshness(item?.publishedAt || item?.date, new Date(), item?.freshnessDays || FRESHNESS_DAYS).fresh);
   if (invalid.length) {
-    throw new Error('Generation blocked: all selected items must be source-verified, include a valid URL, and be published in the last 7 days. Refresh live content first.');
+    throw new Error('Generation blocked: all selected items must be source-verified, include a valid URL, and be inside the verified freshness window. Refresh live content first.');
   }
 }

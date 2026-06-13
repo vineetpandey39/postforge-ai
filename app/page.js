@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import './globals.css';
-import { FORMATS, PILLARS } from './lib/validation';
+import { FORMATS, PILLAR_FRESHNESS_DAYS, PILLARS } from './lib/validation';
 
 const HASHTAGS_FALLBACK = '#AItools #AIautomation #AIforcreators #buildinpublic #creatorbusiness';
 
@@ -40,6 +40,7 @@ export default function PostForge() {
   const [items, setItems] = useState({ news: [], tool: [], income: [], transformation: [], automation: [] });
   const [selected, setSelected] = useState([]);
   const [status, setStatus] = useState('Refresh the last 7 days of verified sources to begin.');
+  const [freshnessDays, setFreshnessDays] = useState(PILLAR_FRESHNESS_DAYS.news);
   const [lastRefresh, setLastRefresh] = useState(null);
   const [rejected, setRejected] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -55,7 +56,7 @@ export default function PostForge() {
   const selectedItems = currentItems.filter(item => selected.includes(item.id));
   const publishReady = images.filter(img => img.success && img.imageUrl).length;
 
-  function resetWorkspace(nextStatus = 'Refresh the last 7 days of verified sources to begin.') {
+  function resetWorkspace(nextStatus = `Refresh verified sources for this ${PILLAR_FRESHNESS_DAYS[pillar.id] || 7}-day window.`) {
     setSelected([]);
     setOutput(null);
     setImages([]);
@@ -66,12 +67,15 @@ export default function PostForge() {
 
   function selectPillar(next) {
     setPillar(next);
-    resetWorkspace();
+    const days = PILLAR_FRESHNESS_DAYS[next.id] || 7;
+    setFreshnessDays(days);
+    resetWorkspace(`Refresh verified sources for this ${days}-day window.`);
   }
 
   async function refresh() {
     setLoading(true);
-    resetWorkspace(`Searching the last 7 days for ${pillar.full}...`);
+    const activeWindow = PILLAR_FRESHNESS_DAYS[pillar.id] || 7;
+    resetWorkspace(`Searching the last ${activeWindow} days for ${pillar.full}...`);
     try {
       const res = await fetch('/api/refresh', {
         method: 'POST',
@@ -82,8 +86,9 @@ export default function PostForge() {
       if (!res.ok || data.error) throw new Error(data.error || 'Refresh failed');
       setItems(prev => ({ ...prev, [pillar.id]: data.items }));
       setLastRefresh(data.refreshedAt || new Date().toISOString());
+      setFreshnessDays(data.freshnessDays || activeWindow);
       setRejected(data.rejected || 0);
-      setStatus(`Loaded ${data.items.length} verified source${data.items.length === 1 ? '' : 's'} from the last 7 days.`);
+      setStatus(`Loaded ${data.items.length} verified source${data.items.length === 1 ? '' : 's'} from the last ${data.freshnessDays || activeWindow} days.`);
     } catch (error) {
       setItems(prev => ({ ...prev, [pillar.id]: [] }));
       setStatus(`Refresh failed: ${error.message}`);
@@ -195,7 +200,7 @@ export default function PostForge() {
           <h1>PostForge AI</h1>
           <p className="subhead">Find fresh sources, generate a curiosity-led carousel, create images, and publish to Instagram.</p>
         </div>
-        <div className="trust-pill">Last 7 days only</div>
+        <div className="trust-pill">Fresh verified sources</div>
       </header>
 
       <Panel className="control-panel">
@@ -216,7 +221,7 @@ export default function PostForge() {
         </div>
 
         <div className="metrics">
-          <Metric label="Fresh window" value="7 days" tone="green" />
+          <Metric label="Fresh window" value={`${freshnessDays} days`} tone="green" />
           <Metric label="Verified items" value={currentItems.length} />
           <Metric label="Selected" value={selectedItems.length} />
           <Metric label="Rejected stale" value={rejected} tone={rejected ? 'amber' : ''} />
@@ -238,7 +243,7 @@ export default function PostForge() {
           {!currentItems.length && (
             <div className="empty-state">
               <strong>No sources loaded</strong>
-              <span>Refresh to fetch only source-backed items published in the last 7 days.</span>
+              <span>Refresh to fetch source-backed items inside this tab's verified freshness window.</span>
             </div>
           )}
 
