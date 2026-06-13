@@ -51,6 +51,7 @@ export default function PostForge() {
   const [assetMode, setAssetMode] = useState('ai');
   const [canvaStatus, setCanvaStatus] = useState('');
   const [canvaResult, setCanvaResult] = useState(null);
+  const [lastCanvaTemplateId, setLastCanvaTemplateId] = useState('');
   const [posting, setPosting] = useState(false);
   const [postStatus, setPostStatus] = useState('');
   const [copied, setCopied] = useState('');
@@ -67,6 +68,7 @@ export default function PostForge() {
     setImageStatus('');
     setCanvaStatus('');
     setCanvaResult(null);
+    setLastCanvaTemplateId('');
     setPostStatus('');
     setStatus(nextStatus);
   }
@@ -111,6 +113,7 @@ export default function PostForge() {
     setImageStatus('');
     setCanvaStatus('');
     setCanvaResult(null);
+    setLastCanvaTemplateId('');
     setPostStatus('');
     try {
       const res = await fetch('/api/generate', {
@@ -189,7 +192,7 @@ export default function PostForge() {
     }
   }
 
-  async function createCanvaDesign() {
+  async function createCanvaDesign({ avoidLastTemplate = false } = {}) {
     if (!output?.slides?.length) return;
     setAssetMode('canva');
     setCanvaStatus('Creating an editable Canva carousel from the generated content...');
@@ -208,7 +211,8 @@ export default function PostForge() {
           slides: output.slides,
           caption: output.caption,
           cta: output.cta,
-          hashtags: output.hashtags || HASHTAGS_FALLBACK
+          hashtags: output.hashtags || HASHTAGS_FALLBACK,
+          avoidTemplateId: avoidLastTemplate ? lastCanvaTemplateId : ''
         })
       });
       const data = await res.json();
@@ -217,7 +221,8 @@ export default function PostForge() {
         throw new Error(data.error || 'Canva design creation failed');
       }
       setCanvaResult(data);
-      setCanvaStatus('Editable Canva design created. Open it, tune the visual template, then export if you want a manual backup.');
+      setLastCanvaTemplateId(data.template?.id || '');
+      setCanvaStatus(`Editable Canva design created${data.template?.name ? ` with ${data.template.name}` : ''}. Open it, tune the visual template, then export if you want a manual backup.`);
     } catch (error) {
       setCanvaStatus(`Canva failed: ${error.message}`);
     }
@@ -404,7 +409,7 @@ export default function PostForge() {
                   ))}
                   <div className="asset-actions">
                     <Button onClick={() => { setAssetMode('ai'); generateImages(); }}>Generate AI Images</Button>
-                    <Button variant="secondary" onClick={createCanvaDesign}>Create Editable Canva</Button>
+                    <Button variant="secondary" onClick={() => createCanvaDesign()}>Create Editable Canva</Button>
                   </div>
                   {imageStatus && <p className="small-note">{imageStatus}</p>}
                   {canvaStatus && <p className={`small-note ${canvaStatus.includes('failed') ? 'error' : ''}`}>{canvaStatus}</p>}
@@ -457,8 +462,16 @@ export default function PostForge() {
                 <span className="eyebrow">Editable route</span>
                 <h3>{canvaResult?.editUrl ? 'Your Canva carousel is ready' : 'Canva setup needed'}</h3>
                 <p>{canvaStatus || 'Create an editable Canva design from the generated carousel copy.'}</p>
+                {canvaResult?.template && (
+                  <p className="template-pill">Template: {canvaResult.template.name} · {canvaResult.template.style}</p>
+                )}
                 {canvaResult?.editUrl && <a href={canvaResult.editUrl} target="_blank" rel="noreferrer">Open editable design</a>}
                 {canvaResult?.viewUrl && <a href={canvaResult.viewUrl} target="_blank" rel="noreferrer">View design</a>}
+                {output?.slides?.length && (
+                  <Button variant="secondary" onClick={() => createCanvaDesign({ avoidLastTemplate: true })}>
+                    Try Different Canva Template
+                  </Button>
+                )}
                 {canvaResult?.setup && (
                   <ul>
                     {canvaResult.setup.map(step => <li key={step}>{step}</li>)}

@@ -33,7 +33,8 @@ Add your keys in `.env.local`.
 - Optional: `META_GRAPH_VERSION` - default: `v23.0`.
 - Optional: `CANVA_CLIENT_ID` and `CANVA_CLIENT_SECRET` - your Canva app credentials if you later add full OAuth.
 - `CANVA_ACCESS_TOKEN` - required for the Canva editable-design route.
-- `CANVA_BRAND_TEMPLATE_ID` - required Canva brand template to autofill with carousel copy.
+- `CANVA_BRAND_TEMPLATE_ID` - single Canva brand template fallback.
+- `CANVA_TEMPLATE_POOL` - preferred; JSON list of Canva brand templates to rotate through.
 
 ## Canva editable backup
 
@@ -59,4 +60,30 @@ cta
 hashtags
 ```
 
-Add `CANVA_ACCESS_TOKEN` and `CANVA_BRAND_TEMPLATE_ID` to Vercel and redeploy. The existing AI image route remains the direct Instagram publishing route; Canva is the editable backup route.
+Add `CANVA_ACCESS_TOKEN` and either `CANVA_TEMPLATE_POOL` or `CANVA_BRAND_TEMPLATE_ID` to Vercel and redeploy. The existing AI image route remains the direct Instagram publishing route; Canva is the editable backup route.
+
+Use `CANVA_TEMPLATE_POOL` when you want different layouts instead of one repeated template:
+
+```json
+[
+  {
+    "id": "YOUR_DARK_NEON_BRAND_TEMPLATE_ID",
+    "name": "Purple black AI tech",
+    "style": "dark neon viral AI"
+  },
+  {
+    "id": "YOUR_EDITORIAL_BRAND_TEMPLATE_ID",
+    "name": "Editorial prompt guide",
+    "style": "light serif education"
+  },
+  {
+    "id": "YOUR_DASHBOARD_BRAND_TEMPLATE_ID",
+    "name": "Data proof dashboard",
+    "style": "metrics and proof"
+  }
+]
+```
+
+The app randomly picks from this pool each time Canva generation runs. The `Try Different Canva Template` button asks the server to avoid the last template when the pool has more than one option.
+
+Canva public marketplace template IDs, such as `EAG8wiHfHdI`, are good inspiration/base templates. For Autofill, first customize them in your Canva account, rename the text fields to match the field names above, and publish each one as your own Canva brand template. Put those resulting brand template IDs in `CANVA_TEMPLATE_POOL`.

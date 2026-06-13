@@ -31,6 +31,46 @@ function getCanvaData({ hook, cover_text, cover_subtext, slides = [], caption = 
   return data;
 }
 
+function parseTemplatePool() {
+  const rawPool = clean(process.env.CANVA_TEMPLATE_POOL);
+  const legacyId = clean(process.env.CANVA_BRAND_TEMPLATE_ID);
+
+  if (!rawPool) {
+    return legacyId ? [{ id: legacyId, name: 'Default Canva brand template', style: 'default' }] : [];
+  }
+
+  try {
+    const parsed = JSON.parse(rawPool);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((template, index) => typeof template === 'string'
+          ? { id: clean(template), name: `Canva template ${index + 1}`, style: 'mixed' }
+          : {
+              id: clean(template.id || template.templateId || template.brand_template_id),
+              name: text(template.name || `Canva template ${index + 1}`, 80),
+              style: text(template.style || template.category || 'mixed', 80)
+            })
+        .filter(template => template.id);
+    }
+  } catch {
+    return rawPool
+      .split(',')
+      .map((id, index) => ({ id: clean(id), name: `Canva template ${index + 1}`, style: 'mixed' }))
+      .filter(template => template.id);
+  }
+
+  return [];
+}
+
+function pickTemplate(pool, avoidTemplateId) {
+  if (!pool.length) return null;
+  const candidates = pool.length > 1 && avoidTemplateId
+    ? pool.filter(template => template.id !== avoidTemplateId)
+    : pool;
+  const usable = candidates.length ? candidates : pool;
+  return usable[Math.floor(Math.random() * usable.length)];
+}
+
 function isPending(status) {
   return ['in_progress', 'pending', 'running'].includes(String(status || '').toLowerCase());
 }
@@ -58,21 +98,22 @@ async function canvaFetch(path, { method = 'GET', token, body } = {}) {
 export async function POST(request) {
   try {
     const accessToken = clean(process.env.CANVA_ACCESS_TOKEN);
-    const brandTemplateId = clean(process.env.CANVA_BRAND_TEMPLATE_ID);
-
     const body = await request.json();
     const canvaData = getCanvaData(body);
+    const templatePool = parseTemplatePool();
+    const selectedTemplate = pickTemplate(templatePool, clean(body.avoidTemplateId));
 
-    if (!accessToken || !brandTemplateId) {
+    if (!accessToken || !selectedTemplate) {
       return jsonResponse({
-        error: 'Canva Autofill needs CANVA_ACCESS_TOKEN and CANVA_BRAND_TEMPLATE_ID in Vercel.',
+        error: 'Canva Autofill needs CANVA_ACCESS_TOKEN and at least one Canva brand template ID in Vercel.',
         setup: [
           'Create a Canva brand template with text fields named cover_headline, cover_subline, handle, slide_1_headline through slide_5_headline, slide_1_subline through slide_5_subline, slide_1_stat through slide_5_stat, caption, cta, and hashtags.',
           'Generate a Canva Connect access token with design:content:write and design:meta:read scopes.',
-          'Add CANVA_ACCESS_TOKEN and CANVA_BRAND_TEMPLATE_ID to Vercel, then redeploy.'
+          'Add CANVA_ACCESS_TOKEN and CANVA_TEMPLATE_POOL to Vercel, then redeploy. CANVA_BRAND_TEMPLATE_ID still works for one fallback template.'
         ],
         canvaPrompt: `Create a 6-page Instagram carousel using a premium high-retention creator template. Use bold layered visuals, minimal text, strong contrast, and a curiosity arc. Cover: ${text(body.cover_text || body.hook)}. Slides: ${(body.slides || []).map(s => text(s.slide_headline || s.title, 50)).join(' | ')}. Add @aibyvineet at the bottom of every page.`,
-        dataFields: canvaData
+        dataFields: canvaData,
+        templatePoolCount: templatePool.length
       }, 400);
     }
 
@@ -80,7 +121,7 @@ export async function POST(request) {
       method: 'POST',
       token: accessToken,
       body: {
-        brand_template_id: brandTemplateId,
+        brand_template_id: selectedTemplate.id,
         data: canvaData
       }
     });
@@ -103,6 +144,7 @@ export async function POST(request) {
     return jsonResponse({
       success: true,
       jobId,
+      template: selectedTemplate,
       design,
       editUrl: design?.urls?.edit_url || design?.url,
       viewUrl: design?.urls?.view_url || design?.url,
