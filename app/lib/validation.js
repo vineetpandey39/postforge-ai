@@ -7,6 +7,7 @@ export const PILLARS = [
 ];
 
 export const FORMATS = ['Carousel', 'Reel Script', 'Story Hook', 'Caption Only'];
+export const FRESHNESS_DAYS = 7;
 
 export function jsonResponse(payload, status = 200) {
   return Response.json(payload, { status });
@@ -29,11 +30,36 @@ export function isValidHttpUrl(value) {
   }
 }
 
+export function parseItemDate(value) {
+  const text = String(value || '').trim();
+  const isoMatch = text.match(/\d{4}-\d{2}-\d{2}/);
+  const parsed = isoMatch ? new Date(`${isoMatch[0]}T00:00:00Z`) : new Date(text);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+export function getFreshness(itemDate, now = new Date(), days = FRESHNESS_DAYS) {
+  const parsed = parseItemDate(itemDate);
+  if (!parsed) return { fresh: false, ageDays: null, publishedAt: '' };
+
+  const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const itemUtc = Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate());
+  const ageDays = Math.floor((todayUtc - itemUtc) / 86400000);
+
+  return {
+    fresh: ageDays >= 0 && ageDays <= days,
+    ageDays,
+    publishedAt: new Date(itemUtc).toISOString().slice(0, 10)
+  };
+}
+
 export function normalizeItem(item, index, pillar) {
+  const freshness = getFreshness(item.date);
   const normalized = {
     id: String(item.id || `${pillar}-${Date.now()}-${index}`),
     tag: String(item.tag || 'AI').slice(0, 30),
     date: String(item.date || '').slice(0, 80),
+    publishedAt: freshness.publishedAt,
+    ageDays: freshness.ageDays,
     source: String(item.source || '').slice(0, 80),
     headline: String(item.headline || '').slice(0, 180),
     summary: String(item.summary || '').slice(0, 600),
@@ -45,6 +71,7 @@ export function normalizeItem(item, index, pillar) {
     normalized.verified &&
     normalized.source &&
     normalized.date &&
+    freshness.fresh &&
     normalized.headline &&
     normalized.summary &&
     isValidHttpUrl(normalized.url)
@@ -56,8 +83,8 @@ export function requireVerifiedItems(items) {
   if (!Array.isArray(items) || items.length === 0) {
     throw new Error('Select at least one verified source item.');
   }
-  const invalid = items.filter(item => !item?.verified || !isValidHttpUrl(item?.url));
+  const invalid = items.filter(item => !item?.verified || !isValidHttpUrl(item?.url) || !getFreshness(item?.publishedAt || item?.date).fresh);
   if (invalid.length) {
-    throw new Error('Generation blocked: all selected items must be source-verified and include a valid URL. Refresh live content first.');
+    throw new Error('Generation blocked: all selected items must be source-verified, include a valid URL, and be published in the last 7 days. Refresh live content first.');
   }
 }

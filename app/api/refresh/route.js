@@ -1,15 +1,15 @@
-import { extractJson, jsonResponse, normalizeItem } from '../../lib/validation';
+import { extractJson, FRESHNESS_DAYS, jsonResponse, normalizeItem } from '../../lib/validation';
 
 export const maxDuration = 120;
 
 const SOURCE_HINTS = 'official company blog OR Reuters OR The Verge OR TechCrunch OR VentureBeat OR CNBC OR Bloomberg OR Google Blog OR OpenAI Blog OR Anthropic News OR Meta AI Blog OR Microsoft Blog';
 
 const QUERIES = {
-  news: `latest AI company announcements and AI product news from the last 14 days ${SOURCE_HINTS}`,
-  tool: `latest AI tool launches for creators automation video image coding from the last 14 days ${SOURCE_HINTS}`,
-  income: `recent creator economy AI income case study real numbers from the last 30 days credible source`,
-  transformation: `recent AI workplace productivity career transformation study from the last 30 days credible source`,
-  automation: `recent AI automation workflow case study time saved cost saved from the last 30 days credible source`
+  news: `AI company announcements and AI product news published in the last 7 days ${SOURCE_HINTS}`,
+  tool: `AI tool launches for creators automation video image coding published in the last 7 days ${SOURCE_HINTS}`,
+  income: `AI creator economy income case study with real numbers published in the last 7 days credible source`,
+  transformation: `AI workplace productivity or career transformation study published in the last 7 days credible source`,
+  automation: `AI automation workflow case study time saved cost saved published in the last 7 days credible source`
 };
 
 export async function POST(request) {
@@ -20,6 +20,7 @@ export async function POST(request) {
 
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
+    const since = new Date(now.getTime() - FRESHNESS_DAYS * 86400000).toISOString().slice(0, 10);
     const query = QUERIES[pillar] || QUERIES.news;
 
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -34,7 +35,7 @@ export async function POST(request) {
         messages: [
           {
             role: 'system',
-            content: `You are a strict fact-checking researcher for an Instagram AI content tool. Today is ${today}. Return only real, source-backed items. Do not include rumors, fictional model names, unverified claims, or old launches repackaged as new. Prefer primary sources and reputable publications. Return raw JSON only.`
+            content: `You are a strict fact-checking researcher for an Instagram AI content tool. Today is ${today}. Return only real, source-backed items published from ${since} through ${today}. Do not include rumors, fictional model names, unverified claims, recycled old launches, undated posts, or articles outside this date window. Prefer primary sources and reputable publications. Return raw JSON only.`
           },
           {
             role: 'user',
@@ -52,16 +53,15 @@ export async function POST(request) {
     const data = await res.json();
     const text = data.choices?.[0]?.message?.content || '';
     const parsed = extractJson(text, 'array');
-    const items = parsed
-      .map((item, index) => normalizeItem(item, index, pillar))
-      .filter(item => item.verified)
-      .slice(0, 6);
+    const normalized = parsed.map((item, index) => normalizeItem(item, index, pillar));
+    const items = normalized.filter(item => item.verified).slice(0, 6);
+    const staleCount = normalized.filter(item => !item.verified).length;
 
     if (!items.length) {
-      return jsonResponse({ error: 'No verified recent items found. Try another pillar or refresh later.' }, 404);
+      return jsonResponse({ error: `No verified items from the last ${FRESHNESS_DAYS} days found. ${staleCount ? `${staleCount} stale or unverified result(s) were rejected.` : 'Try another pillar or refresh later.'}` }, 404);
     }
 
-    return jsonResponse({ items, refreshedAt: new Date().toISOString() });
+    return jsonResponse({ items, refreshedAt: new Date().toISOString(), since, freshnessDays: FRESHNESS_DAYS, rejected: staleCount });
   } catch (error) {
     return jsonResponse({ error: error.message }, 500);
   }

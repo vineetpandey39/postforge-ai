@@ -6,13 +6,32 @@ import { FORMATS, PILLARS } from './lib/validation';
 
 const HASHTAGS_FALLBACK = '#AItools #AIautomation #AIforcreators #buildinpublic #creatorbusiness';
 
-function Card({ children, style }) {
-  return <div style={{ background: 'rgba(255,255,255,0.045)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, padding: 16, ...style }}>{children}</div>;
+function Button({ children, onClick, disabled, variant = 'primary', className = '' }) {
+  return (
+    <button className={`btn ${variant} ${className}`} onClick={onClick} disabled={disabled}>
+      {children}
+    </button>
+  );
 }
 
-function Button({ children, onClick, disabled, variant = 'primary', style }) {
-  const bg = variant === 'primary' ? '#6366F1' : variant === 'danger' ? '#EF4444' : 'rgba(255,255,255,0.08)';
-  return <button onClick={onClick} disabled={disabled} style={{ background: bg, color: '#fff', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 10, padding: '10px 14px', cursor: 'pointer', fontWeight: 700, ...style }}>{children}</button>;
+function Panel({ children, className = '' }) {
+  return <section className={`panel ${className}`}>{children}</section>;
+}
+
+function Metric({ label, value, tone = '' }) {
+  return (
+    <div className={`metric ${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function itemAge(item) {
+  if (typeof item.ageDays !== 'number') return '7d verified';
+  if (item.ageDays === 0) return 'Today';
+  if (item.ageDays === 1) return '1 day old';
+  return `${item.ageDays} days old`;
 }
 
 export default function PostForge() {
@@ -20,7 +39,9 @@ export default function PostForge() {
   const [format, setFormat] = useState('Carousel');
   const [items, setItems] = useState({ news: [], tool: [], income: [], transformation: [], automation: [] });
   const [selected, setSelected] = useState([]);
-  const [status, setStatus] = useState('Refresh live verified content to begin.');
+  const [status, setStatus] = useState('Refresh the last 7 days of verified sources to begin.');
+  const [lastRefresh, setLastRefresh] = useState(null);
+  const [rejected, setRejected] = useState(0);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [output, setOutput] = useState(null);
@@ -32,24 +53,25 @@ export default function PostForge() {
 
   const currentItems = useMemo(() => items[pillar.id] || [], [items, pillar.id]);
   const selectedItems = currentItems.filter(item => selected.includes(item.id));
+  const publishReady = images.filter(img => img.success && img.imageUrl).length;
 
-  function selectPillar(next) {
-    setPillar(next);
+  function resetWorkspace(nextStatus = 'Refresh the last 7 days of verified sources to begin.') {
     setSelected([]);
     setOutput(null);
     setImages([]);
     setImageStatus('');
     setPostStatus('');
-    setStatus('Refresh live verified content to begin.');
+    setStatus(nextStatus);
+  }
+
+  function selectPillar(next) {
+    setPillar(next);
+    resetWorkspace();
   }
 
   async function refresh() {
     setLoading(true);
-    setOutput(null);
-    setImages([]);
-    setPostStatus('');
-    setSelected([]);
-    setStatus(`Searching verified sources for ${pillar.full}...`);
+    resetWorkspace(`Searching the last 7 days for ${pillar.full}...`);
     try {
       const res = await fetch('/api/refresh', {
         method: 'POST',
@@ -59,8 +81,11 @@ export default function PostForge() {
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Refresh failed');
       setItems(prev => ({ ...prev, [pillar.id]: data.items }));
-      setStatus(`Loaded ${data.items.length} verified items. Select one or more to generate.`);
+      setLastRefresh(data.refreshedAt || new Date().toISOString());
+      setRejected(data.rejected || 0);
+      setStatus(`Loaded ${data.items.length} verified source${data.items.length === 1 ? '' : 's'} from the last 7 days.`);
     } catch (error) {
+      setItems(prev => ({ ...prev, [pillar.id]: [] }));
       setStatus(`Refresh failed: ${error.message}`);
     } finally {
       setLoading(false);
@@ -73,6 +98,7 @@ export default function PostForge() {
     setOutput(null);
     setImages([]);
     setImageStatus('');
+    setPostStatus('');
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
@@ -83,7 +109,7 @@ export default function PostForge() {
       if (!res.ok || data.error) throw new Error(data.error || 'Generation failed');
       setOutput(data);
     } catch (error) {
-      alert(error.message);
+      setStatus(`Generation failed: ${error.message}`);
     } finally {
       setGenerating(false);
     }
@@ -93,6 +119,7 @@ export default function PostForge() {
     if (!output?.slides?.length) return;
     setImageStatus('Generating 6 high-engagement carousel images...');
     setImages([]);
+    setPostStatus('');
     try {
       const res = await fetch('/api/carousel-images', {
         method: 'POST',
@@ -109,8 +136,7 @@ export default function PostForge() {
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Image generation failed');
       setImages(data.images || []);
-      setPostStatus('');
-      setImageStatus(`${data.successCount}/${data.totalCount} images generated.`);
+      setImageStatus(`${data.successCount}/${data.totalCount} images generated. ${data.images?.some(img => img.imageUrl) ? 'Instagram-ready URLs created.' : 'Add BLOB_READ_WRITE_TOKEN for posting.'}`);
     } catch (error) {
       setImageStatus(error.message);
     }
@@ -119,7 +145,7 @@ export default function PostForge() {
   async function postToInstagram() {
     const imageUrls = images.filter(img => img.success && img.imageUrl).map(img => img.imageUrl);
     if (imageUrls.length < 2) {
-      setPostStatus('Instagram posting needs public image URLs. Add BLOB_READ_WRITE_TOKEN in Vercel and regenerate images.');
+      setPostStatus('Posting needs public image URLs. Add BLOB_READ_WRITE_TOKEN in Vercel and regenerate images.');
       return;
     }
 
@@ -162,90 +188,164 @@ export default function PostForge() {
   }
 
   return (
-    <main style={{ maxWidth: 1120, margin: '0 auto', padding: 20 }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', marginBottom: 20 }}>
+    <main className="app-shell">
+      <header className="topbar">
         <div>
-          <h1 style={{ margin: 0, fontSize: 32 }}>PostForge AI</h1>
-          <p style={{ color: '#9CA3AF', margin: '6px 0 0' }}>Verified content generator for @aibyvineet</p>
+          <p className="eyebrow">Verified AI content cockpit</p>
+          <h1>PostForge AI</h1>
+          <p className="subhead">Find fresh sources, generate a curiosity-led carousel, create images, and publish to Instagram.</p>
         </div>
-        <div style={{ color: '#22C55E', fontWeight: 800 }}>VERIFIED-ONLY</div>
+        <div className="trust-pill">Last 7 days only</div>
       </header>
 
-      <Card style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-          {PILLARS.map(p => <Button key={p.id} variant="secondary" onClick={() => selectPillar(p)} style={{ background: pillar.id === p.id ? p.color : 'rgba(255,255,255,0.07)' }}>{p.label}</Button>)}
+      <Panel className="control-panel">
+        <div className="pillar-tabs">
+          {PILLARS.map(p => (
+            <button key={p.id} className={`tab ${pillar.id === p.id ? 'active' : ''}`} style={{ '--accent': p.color }} onClick={() => selectPillar(p)}>
+              {p.label}
+            </button>
+          ))}
         </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          <select value={format} onChange={e => setFormat(e.target.value)} style={{ background: '#111827', color: '#fff', border: '1px solid rgba(255,255,255,0.16)', borderRadius: 10, padding: '10px 12px' }}>
+
+        <div className="action-row">
+          <select value={format} onChange={e => setFormat(e.target.value)}>
             {FORMATS.map(f => <option key={f}>{f}</option>)}
           </select>
-          <Button onClick={refresh} disabled={loading}>{loading ? 'Refreshing...' : `Refresh ${pillar.full}`}</Button>
-          <Button onClick={generate} disabled={generating || !selectedItems.length}>{generating ? 'Generating...' : `Generate (${selectedItems.length})`}</Button>
+          <Button onClick={refresh} disabled={loading}>{loading ? 'Checking sources...' : `Refresh ${pillar.full}`}</Button>
+          <Button onClick={generate} disabled={generating || !selectedItems.length} variant="strong">{generating ? 'Writing...' : `Generate (${selectedItems.length})`}</Button>
         </div>
-        <p style={{ marginBottom: 0, color: status.includes('failed') ? '#FCA5A5' : '#CBD5E1' }}>{status}</p>
-      </Card>
 
-      <section style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 16 }}>
-        <Card>
-          <h2 style={{ marginTop: 0 }}>{pillar.full} Feed</h2>
-          {!currentItems.length && <p style={{ color: '#9CA3AF' }}>No preloaded fake content. Use Refresh to fetch verified live items.</p>}
-          {currentItems.map(item => {
-            const isSelected = selected.includes(item.id);
-            return <div key={item.id} onClick={() => setSelected(prev => isSelected ? prev.filter(id => id !== item.id) : [...prev, item.id])} style={{ padding: 12, borderRadius: 12, marginBottom: 10, cursor: 'pointer', background: isSelected ? `${pillar.color}22` : 'rgba(255,255,255,0.035)', border: `1px solid ${isSelected ? pillar.color : 'rgba(255,255,255,0.08)'}` }}>
-              <div style={{ color: '#A5B4FC', fontSize: 12, fontWeight: 800 }}>{item.tag} · {item.source} · {item.date} · {item.verified ? 'Verified' : 'Unverified'}</div>
-              <h3 style={{ margin: '6px 0', fontSize: 16 }}>{item.headline}</h3>
-              <p style={{ margin: '0 0 8px', color: '#CBD5E1', fontSize: 14 }}>{item.summary}</p>
-              <a href={item.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#60A5FA', fontSize: 12 }}>Open source</a>
-            </div>;
-          })}
-        </Card>
+        <div className="metrics">
+          <Metric label="Fresh window" value="7 days" tone="green" />
+          <Metric label="Verified items" value={currentItems.length} />
+          <Metric label="Selected" value={selectedItems.length} />
+          <Metric label="Rejected stale" value={rejected} tone={rejected ? 'amber' : ''} />
+        </div>
 
-        <Card>
-          <h2 style={{ marginTop: 0 }}>Generated Output</h2>
-          {!output && <p style={{ color: '#9CA3AF' }}>Your generated post will appear here.</p>}
-          {output && <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><h3>Hook</h3><Button variant="secondary" onClick={() => copy(output.hook, 'hook')}>{copied === 'hook' ? 'Copied' : 'Copy'}</Button></div>
-            <p style={{ fontSize: 20, fontWeight: 800 }}>{output.hook}</p>
+        <p className={`status ${status.includes('failed') ? 'error' : ''}`}>{status}</p>
+      </Panel>
 
-            {output.slides && <>
-              <h3>Slides</h3>
-              {output.slides.map((s, i) => <div key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 10, marginTop: 10 }}>
-                <strong>{i + 1}. {s.role ? `${String(s.role).toUpperCase()} - ` : ''}{s.title}</strong>
-                <p style={{ whiteSpace: 'pre-wrap', color: '#CBD5E1' }}>{s.body}</p>
-                {s.source_url && <a href={s.source_url} target="_blank" rel="noreferrer" style={{ color: '#60A5FA', fontSize: 12 }}>{s.source}</a>}
-              </div>)}
-              <Button onClick={generateImages} style={{ marginTop: 14 }}>Generate 6 Viral Carousel Images</Button>
-              {imageStatus && <p style={{ color: '#CBD5E1' }}>{imageStatus}</p>}
-            </>}
+      <section className="workspace">
+        <Panel>
+          <div className="panel-head">
+            <div>
+              <p className="eyebrow">{pillar.full}</p>
+              <h2>Verified Source Feed</h2>
+            </div>
+            {lastRefresh && <span className="small-note">Updated {new Date(lastRefresh).toLocaleTimeString()}</span>}
+          </div>
 
-            {output.script_segments && <>{output.script_segments.map((s, i) => <p key={i}><b>{s.timestamp}</b><br />Visual: {s.visual}<br />Voiceover: {s.voiceover}</p>)}</>}
-            {output.stories && <>{output.stories.map((s, i) => <p key={i}><b>Story {s.story_number}</b><br />{s.text_overlay}<br />Sticker: {s.sticker_suggestion}</p>)}</>}
-            {output.caption_body && <p style={{ whiteSpace: 'pre-wrap' }}>{output.caption_body}</p>}
+          {!currentItems.length && (
+            <div className="empty-state">
+              <strong>No sources loaded</strong>
+              <span>Refresh to fetch only source-backed items published in the last 7 days.</span>
+            </div>
+          )}
 
-            <h3>Caption</h3>
-            <p style={{ whiteSpace: 'pre-wrap', color: '#CBD5E1' }}>{output.caption}</p>
-            <h3>CTA</h3><p>{output.cta}</p>
-            <h3>Hashtags</h3><p style={{ color: '#CBD5E1' }}>{output.hashtags || HASHTAGS_FALLBACK}</p>
-          </>}
-        </Card>
+          <div className="source-list">
+            {currentItems.map(item => {
+              const isSelected = selected.includes(item.id);
+              return (
+                <article key={item.id} className={`source-card ${isSelected ? 'selected' : ''}`} onClick={() => setSelected(prev => isSelected ? prev.filter(id => id !== item.id) : [...prev, item.id])}>
+                  <div className="source-meta">
+                    <span>{item.source}</span>
+                    <span>{item.publishedAt || item.date}</span>
+                    <span className="fresh-badge">{itemAge(item)}</span>
+                  </div>
+                  <h3>{item.headline}</h3>
+                  <p>{item.summary}</p>
+                  <div className="source-actions">
+                    <a href={item.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>Open source</a>
+                    <span>{isSelected ? 'Selected' : 'Click to select'}</span>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </Panel>
+
+        <Panel>
+          <div className="panel-head">
+            <div>
+              <p className="eyebrow">Creation plan</p>
+              <h2>Generated Output</h2>
+            </div>
+            {output && <Button variant="secondary" onClick={() => copy(output.hook, 'hook')}>{copied === 'hook' ? 'Copied' : 'Copy hook'}</Button>}
+          </div>
+
+          {!output && (
+            <div className="empty-state">
+              <strong>No post yet</strong>
+              <span>Select verified sources, then generate a carousel plan.</span>
+            </div>
+          )}
+
+          {output && (
+            <div className="output-stack">
+              <div className="hook-card">
+                <span>Hook</span>
+                <strong>{output.hook}</strong>
+              </div>
+
+              {output.slides && (
+                <div className="story-arc">
+                  {output.slides.map((s, i) => (
+                    <article key={i} className="arc-step">
+                      <span>{i + 2}. {s.role || 'slide'}</span>
+                      <strong>{s.title}</strong>
+                      <p>{s.body}</p>
+                      {s.source_url && <a href={s.source_url} target="_blank" rel="noreferrer">{s.source}</a>}
+                    </article>
+                  ))}
+                  <Button onClick={generateImages}>Generate 6 Viral Carousel Images</Button>
+                  {imageStatus && <p className="small-note">{imageStatus}</p>}
+                </div>
+              )}
+
+              <div className="caption-box">
+                <div>
+                  <span>Caption</span>
+                  <p>{output.caption}</p>
+                </div>
+                <div>
+                  <span>CTA</span>
+                  <p>{output.cta}</p>
+                </div>
+                <div>
+                  <span>5 hashtags</span>
+                  <p>{output.hashtags || HASHTAGS_FALLBACK}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </Panel>
       </section>
 
-      {!!images.length && <Card style={{ marginTop: 16 }}>
-        <h2 style={{ marginTop: 0 }}>Carousel Images</h2>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14 }}>
-          <Button onClick={postToInstagram} disabled={posting || !images.some(img => img.imageUrl)}>
-            {posting ? 'Posting...' : 'Post Carousel to Instagram'}
-          </Button>
-          {postStatus && <span style={{ color: postStatus.includes('failed') || postStatus.includes('needs') ? '#FCA5A5' : '#86EFAC' }}>{postStatus}</span>}
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14 }}>
-          {images.map(img => <div key={img.index}>
-            <div style={{ color: '#CBD5E1', marginBottom: 6 }}>{img.label}</div>
-            {img.success ? <img src={img.image} alt={img.label} style={{ width: '100%', borderRadius: 12, border: '1px solid rgba(255,255,255,0.08)' }} /> : <p style={{ color: '#FCA5A5' }}>{img.error}</p>}
-            {img.success && <Button variant="secondary" onClick={() => download(img.image, `postforge-slide-${img.index + 1}.png`)} style={{ marginTop: 8, width: '100%' }}>Download</Button>}
-          </div>)}
-        </div>
-      </Card>}
+      {!!images.length && (
+        <Panel className="image-panel">
+          <div className="panel-head">
+            <div>
+              <p className="eyebrow">Ready assets</p>
+              <h2>Carousel Images</h2>
+            </div>
+            <Button onClick={postToInstagram} disabled={posting || publishReady < 2} variant="strong">
+              {posting ? 'Posting...' : 'Post Carousel to Instagram'}
+            </Button>
+          </div>
+
+          {postStatus && <p className={`status ${postStatus.includes('failed') || postStatus.includes('needs') ? 'error' : ''}`}>{postStatus}</p>}
+
+          <div className="image-grid">
+            {images.map(img => (
+              <article key={img.index} className="image-card">
+                <span>{img.label}</span>
+                {img.success ? <img src={img.image} alt={img.label} /> : <p className="status error">{img.error}</p>}
+                {img.success && <Button variant="secondary" onClick={() => download(img.image, `postforge-slide-${img.index + 1}.png`)}>Download</Button>}
+              </article>
+            ))}
+          </div>
+        </Panel>
+      )}
     </main>
   );
 }
