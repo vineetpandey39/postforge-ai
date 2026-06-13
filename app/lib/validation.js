@@ -66,10 +66,20 @@ export function getFreshness(itemDate, now = new Date(), days = FRESHNESS_DAYS) 
   };
 }
 
+function stableId(value) {
+  let hash = 0;
+  const text = String(value || '');
+  for (let i = 0; i < text.length; i += 1) {
+    hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
 export function normalizeItem(item, index, pillar, days = PILLAR_FRESHNESS_DAYS[pillar] || FRESHNESS_DAYS) {
   const freshness = getFreshness(item.date, new Date(), days);
+  const idSeed = `${pillar}|${index}|${item.url || ''}|${item.headline || ''}`;
   const normalized = {
-    id: String(item.id || `${pillar}-${Date.now()}-${index}`),
+    id: `${pillar}-${index}-${stableId(idSeed)}`,
     tag: String(item.tag || 'AI').slice(0, 30),
     date: String(item.date || '').slice(0, 80),
     publishedAt: freshness.publishedAt,
