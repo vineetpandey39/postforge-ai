@@ -141,7 +141,11 @@ export default function PostForge() {
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || 'Image generation failed');
       setImages(data.images || []);
-      setImageStatus(`${data.successCount}/${data.totalCount} images generated. ${data.images?.some(img => img.imageUrl) ? 'Instagram-ready URLs created.' : 'Add BLOB_READ_WRITE_TOKEN for posting.'}`);
+      if (data.uploadErrors?.length) {
+        setImageStatus(`${data.successCount}/${data.totalCount} images generated. Blob upload blocked: ${data.uploadErrors[0]}`);
+      } else {
+        setImageStatus(`${data.successCount}/${data.totalCount} images generated. ${data.publicUrlCount ? 'Instagram-ready URLs created.' : 'Add BLOB_READ_WRITE_TOKEN for posting.'}`);
+      }
     } catch (error) {
       setImageStatus(error.message);
     }
@@ -345,6 +349,7 @@ export default function PostForge() {
               <article key={img.index} className="image-card">
                 <span>{img.label}</span>
                 {img.success ? <img src={img.image} alt={img.label} /> : <p className="status error">{img.error}</p>}
+                {img.uploadError && <p className="status error">Public URL not created. Use a public Vercel Blob store for Instagram posting.</p>}
                 {img.success && <Button variant="secondary" onClick={() => download(img.image, `postforge-slide-${img.index + 1}.png`)}>Download</Button>}
               </article>
             ))}

@@ -155,14 +155,30 @@ export async function POST(request) {
     for (const p of prompts) {
       try {
         const image = await generateImage(apiKey, p.prompt);
-        const imageUrl = await uploadImage(image, p.index);
-        results.push({ index: p.index, label: p.label, image, imageUrl, success: true });
+        let imageUrl = null;
+        let uploadError = null;
+
+        try {
+          imageUrl = await uploadImage(image, p.index);
+        } catch (error) {
+          uploadError = error.message;
+        }
+
+        results.push({ index: p.index, label: p.label, image, imageUrl, uploadError, success: true });
       } catch (error) {
         results.push({ index: p.index, label: p.label, error: error.message, success: false });
       }
     }
 
-    return jsonResponse({ images: results, successCount: results.filter(r => r.success).length, totalCount: results.length });
+    const uploadErrors = [...new Set(results.map(result => result.uploadError).filter(Boolean))];
+
+    return jsonResponse({
+      images: results,
+      successCount: results.filter(r => r.success).length,
+      totalCount: results.length,
+      publicUrlCount: results.filter(r => r.imageUrl).length,
+      uploadErrors
+    });
   } catch (error) {
     return jsonResponse({ error: error.message }, 500);
   }
