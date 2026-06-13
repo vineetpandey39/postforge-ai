@@ -315,27 +315,27 @@ export default function PostForge() {
           ctx.drawImage(image, drawX, drawY, drawW, drawH);
 
           const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-          gradient.addColorStop(0, 'rgba(0,0,0,.68)');
-          gradient.addColorStop(.34, 'rgba(0,0,0,.12)');
-          gradient.addColorStop(.72, 'rgba(0,0,0,.22)');
-          gradient.addColorStop(1, 'rgba(0,0,0,.78)');
+          gradient.addColorStop(0, 'rgba(0,0,0,.24)');
+          gradient.addColorStop(.32, 'rgba(0,0,0,.06)');
+          gradient.addColorStop(.66, 'rgba(0,0,0,.2)');
+          gradient.addColorStop(1, 'rgba(0,0,0,.82)');
           ctx.fillStyle = gradient;
           ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-          ctx.fillStyle = 'rgba(8,12,22,.74)';
+          ctx.fillStyle = 'rgba(8,12,22,.82)';
           ctx.strokeStyle = 'rgba(255,255,255,.16)';
           ctx.lineWidth = 3;
-          roundRect(ctx, 70, 1048, 940, 452, 34);
+          roundRect(ctx, 70, 1160, 940, 360, 34);
           ctx.fill();
           ctx.stroke();
 
-          ctx.fillStyle = '#ffffff';
-          ctx.font = '900 92px Arial';
-          wrapCanvasText(ctx, asset.on_screen_text || 'WATCH THIS', 80, 170, 920, 96, 4);
+          ctx.fillStyle = '#8ea3ff';
+          ctx.font = '900 30px Arial';
+          ctx.fillText(String(asset.on_screen_text || 'WATCH THIS').toUpperCase().slice(0, 42), 105, 1230);
 
           ctx.fillStyle = '#dbeafe';
-          ctx.font = '700 44px Arial';
-          wrapCanvasText(ctx, asset.voiceover || '', 105, 1138, 870, 58, 5);
+          ctx.font = '800 46px Arial';
+          wrapCanvasText(ctx, asset.voiceover || '', 105, 1300, 870, 58, 4);
 
           ctx.fillStyle = 'rgba(255,255,255,.22)';
           roundRect(ctx, 80, 1662, 920, 10, 5);

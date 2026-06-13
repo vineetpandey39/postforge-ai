@@ -17,13 +17,13 @@ function reelScenePrompt({ segment, index, pillarId }) {
   }[pillarId] || 'dark premium AI creator studio, neon accents, cinematic lighting';
 
   return `Create a vertical faceless Reel background image, 1024x1536.
-Style: cinematic AI creator B-roll, premium Instagram reel, realistic depth, sharp lighting, no person looking into camera, no readable paragraph text.
+Style: cinematic AI creator B-roll, premium Instagram reel, realistic depth, sharp lighting, no person looking into camera, no text, no letters, no numbers, no captions, no labels, no logos, no UI words.
 Palette: ${palette}.
 Scene ${index + 1} beat: ${clean(segment.beat, 80)}.
 Visual direction: ${clean(segment.visual, 260)}.
 Voiceover meaning to support: ${clean(segment.voiceover, 260)}.
-On-screen text will be added later by the app, so leave clean negative space in the upper middle and lower third.
-Strict rules: do not render random words, no fake logos unless clearly generic, no watermark, no distorted hands, no face close-up, no clutter over text space, make it feel like a viral AI productivity/research reel frame.`;
+On-screen text will be added later by the app, so leave clean negative space in the lower third only.
+Strict rules: the image itself must contain zero readable text of any kind, no random words, no fake logos, no watermark, no distorted hands, no face close-up, no clutter over the lower-third text space, make it feel like a viral AI productivity/research reel frame.`;
 }
 
 async function generateImage(apiKey, prompt) {
