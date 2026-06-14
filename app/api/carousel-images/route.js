@@ -155,7 +155,7 @@ export async function POST(request) {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return jsonResponse({ error: 'OPENAI_API_KEY is not configured.' }, 500);
 
-    const { hook, cover_text, cover_subtext, cover_visual_prompt, slides = [], pillarId = 'news' } = await request.json();
+    const { hook, cover_text, cover_subtext, cover_visual_prompt, slides = [], pillarId = 'news', onlyIndex = null } = await request.json();
     if (!Array.isArray(slides) || !slides.length) return jsonResponse({ error: 'Carousel slides are required.' }, 400);
 
     const prompts = [
@@ -179,8 +179,18 @@ export async function POST(request) {
       }))
     ];
 
+    const hasSingleImageRequest = onlyIndex !== null && onlyIndex !== undefined && onlyIndex !== '';
+    const requestedIndex = hasSingleImageRequest ? Number(onlyIndex) : null;
+    const selectedPrompts = Number.isInteger(requestedIndex)
+      ? prompts.filter(prompt => prompt.index === requestedIndex)
+      : prompts;
+
+    if (!selectedPrompts.length) {
+      return jsonResponse({ error: `No carousel image prompt found for index ${onlyIndex}.` }, 400);
+    }
+
     const results = [];
-    for (const p of prompts) {
+    for (const p of selectedPrompts) {
       try {
         const image = await generateImage(apiKey, p.prompt);
         let imageUrl = null;
@@ -203,7 +213,8 @@ export async function POST(request) {
     return jsonResponse({
       images: results,
       successCount: results.filter(r => r.success).length,
-      totalCount: results.length,
+      totalCount: selectedPrompts.length,
+      fullCarouselCount: prompts.length,
       publicUrlCount: results.filter(r => r.imageUrl).length,
       uploadErrors
     });
