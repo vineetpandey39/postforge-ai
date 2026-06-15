@@ -1,5 +1,5 @@
 import { requirePostforgeAccess } from '../../lib/access';
-import { extractJson, FRESHNESS_DAYS, PILLAR_FRESHNESS_DAYS, jsonResponse, normalizeItem } from '../../lib/validation';
+import { extractJson, FRESHNESS_DAYS, getFreshness, isValidHttpUrl, parseItemDate, PILLAR_FRESHNESS_DAYS, jsonResponse, normalizeItem } from '../../lib/validation';
 
 export const maxDuration = 120;
 
@@ -50,6 +50,29 @@ const COMPANY_ALIASES = [
   ['runway', ['runway']],
   ['elevenlabs', ['elevenlabs', 'eleven labs']],
   ['stability', ['stability ai', 'stable diffusion']]
+];
+
+const EVERGREEN_PATH_HINTS = [
+  '/products/',
+  '/product/',
+  '/models/',
+  '/model/',
+  '/grok',
+  '/chatgpt',
+  '/claude',
+  '/gemini',
+  '/copilot'
+];
+
+const DATE_META_PATTERNS = [
+  /property=["']article:published_time["'][^>]*content=["']([^"']+)["']/i,
+  /name=["']date["'][^>]*content=["']([^"']+)["']/i,
+  /name=["']pubdate["'][^>]*content=["']([^"']+)["']/i,
+  /itemprop=["']datePublished["'][^>]*content=["']([^"']+)["']/i,
+  /"datePublished"\s*:\s*"([^"]+)"/i,
+  /<time[^>]*datetime=["']([^"']+)["']/i,
+  /last updated(?: on)?\s*[:\-]?\s*([a-z]+\s+\d{1,2},\s+\d{4}|\d{4}-\d{2}-\d{2})/i,
+  /published(?: on)?\s*[:\-]?\s*([a-z]+\s+\d{1,2},\s+\d{4}|\d{1,2}\s+[a-z]+\s+\d{4}|\d{4}-\d{2}-\d{2})/i
 ];
 
 function intEnv(name, fallback) {
@@ -140,6 +163,137 @@ function uniqueItems(items) {
     seen.add(key);
     return true;
   });
+}
+
+function stripHtml(html) {
+  return String(html || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractTitle(html) {
+  const title = String(html || '').match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || '';
+  return stripHtml(title).slice(0, 220);
+}
+
+function extractEvidenceDate(html) {
+  const source = String(html || '').slice(0, 240000);
+  for (const pattern of DATE_META_PATTERNS) {
+    const match = source.match(pattern);
+    if (match?.[1]) {
+      const parsed = parseItemDate(match[1]);
+      if (parsed) return parsed.toISOString().slice(0, 10);
+    }
+  }
+  return '';
+}
+
+function meaningfulTokens(value) {
+  const stop = new Set(['the', 'and', 'for', 'with', 'from', 'into', 'that', 'this', 'will', 'soon', 'new', 'latest', 'launches', 'launch', 'announces', 'announced', 'introduces', 'unveils', 'adds', 'major', 'could', 'your', 'about']);
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(token => token.length > 2 && !stop.has(token));
+}
+
+function textOverlapScore(needle, haystack) {
+  const tokens = [...new Set(meaningfulTokens(needle))].slice(0, 18);
+  if (!tokens.length) return 0;
+  const page = String(haystack || '').toLowerCase();
+  const hits = tokens.filter(token => page.includes(token)).length;
+  return hits / tokens.length;
+}
+
+function looksEvergreen(item) {
+  try {
+    const url = new URL(item.url);
+    const path = url.pathname.toLowerCase().replace(/\/+$/, '');
+    const headline = String(item.headline || '').toLowerCase();
+    const launchy = /\b(launch|launches|unveil|unveils|announce|announces|introduced|introduces|dropped|released)\b/.test(headline);
+    return launchy && EVERGREEN_PATH_HINTS.some(hint => path === hint || path.endsWith(hint) || path.includes(`${hint}/`));
+  } catch {
+    return false;
+  }
+}
+
+async function verifySourceItem(item, pillar, freshnessDays) {
+  if (!item.verified || !isValidHttpUrl(item.url)) {
+    return { ...item, verified: false, verificationReason: 'Missing verified source URL.' };
+  }
+
+  try {
+    const res = await fetch(item.url, {
+      headers: {
+        'User-Agent': 'PostForgeAI/1.0 source verifier',
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+      },
+      signal: AbortSignal.timeout(9000)
+    });
+
+    if (!res.ok) {
+      return { ...item, verified: false, verificationReason: `Source returned HTTP ${res.status}.` };
+    }
+
+    const html = await res.text();
+    const pageText = stripHtml(html).slice(0, 120000);
+    const title = extractTitle(html);
+    const evidenceDate = extractEvidenceDate(html);
+    const itemFreshness = getFreshness(item.publishedAt || item.date, new Date(), freshnessDays);
+    const evidenceFreshness = evidenceDate ? getFreshness(evidenceDate, new Date(), freshnessDays) : null;
+    const headlineScore = textOverlapScore(item.headline, `${title} ${pageText}`);
+    const summaryScore = textOverlapScore(item.summary, pageText);
+    const evergreen = looksEvergreen(item);
+
+    if (evergreen && !evidenceDate) {
+      return { ...item, verified: false, verificationReason: 'Rejected evergreen product page presented as a fresh launch.' };
+    }
+
+    if (!itemFreshness.fresh) {
+      return { ...item, verified: false, verificationReason: 'Claimed item date is outside the freshness window.' };
+    }
+
+    if (evidenceDate && !evidenceFreshness?.fresh) {
+      return { ...item, verified: false, verificationReason: `Source page date ${evidenceDate} is outside the freshness window.` };
+    }
+
+    if (!evidenceDate && (pillar === 'news' || pillar === 'tool')) {
+      return { ...item, verified: false, verificationReason: 'No publish/update date found on the source page.' };
+    }
+
+    if (headlineScore < 0.28 || summaryScore < 0.18) {
+      return { ...item, verified: false, verificationReason: 'Source page does not sufficiently support the headline/summary.' };
+    }
+
+    return {
+      ...item,
+      date: evidenceDate || item.date,
+      publishedAt: evidenceDate || item.publishedAt,
+      verified: true,
+      verification: {
+        sourceChecked: true,
+        sourceTitle: title,
+        sourceDate: evidenceDate || item.publishedAt,
+        headlineScore: Number(headlineScore.toFixed(2)),
+        summaryScore: Number(summaryScore.toFixed(2))
+      }
+    };
+  } catch (error) {
+    return { ...item, verified: false, verificationReason: `Source verification failed: ${error.message}` };
+  }
+}
+
+async function verifySourceItems(items, pillar, freshnessDays) {
+  const checked = [];
+  for (const item of items) {
+    checked.push(await verifySourceItem(item, pillar, freshnessDays));
+  }
+  return checked;
 }
 
 async function repairSearchJson({ openaiKey, rawText, pillarFull, since, today }) {
@@ -235,9 +389,10 @@ export async function POST(request) {
       queries.map(query => fetchCandidates({ openaiKey, query, pillarFull, since, today, limit: pillar === 'news' || pillar === 'tool' ? 4 : 8 }).catch(() => []))
     );
     let parsed = uniqueItems(candidateGroups.flat());
-    const normalized = parsed.map((item, index) => normalizeItem(item, index, pillar, freshnessDays));
-    let items = diversifyItems(normalized.filter(item => item.verified), 6, pillar === 'news' || pillar === 'tool' ? 2 : 3);
-    let staleCount = normalized.filter(item => !item.verified).length;
+    let normalized = parsed.map((item, index) => normalizeItem(item, index, pillar, freshnessDays));
+    let verified = await verifySourceItems(normalized, pillar, freshnessDays);
+    let items = diversifyItems(verified.filter(item => item.verified), 6, pillar === 'news' || pillar === 'tool' ? 2 : 3);
+    let staleCount = verified.filter(item => !item.verified).length;
 
     if (items.length < 3) {
       const fallbackQueries = selectQueries(pillar, today, usedQueries, true);
@@ -248,9 +403,10 @@ export async function POST(request) {
         );
         candidateGroups = [...candidateGroups, ...fallbackGroups];
         parsed = uniqueItems(candidateGroups.flat());
-        const repairedNormalized = parsed.map((item, index) => normalizeItem(item, index, pillar, freshnessDays));
-        items = diversifyItems(repairedNormalized.filter(item => item.verified), 6, pillar === 'news' || pillar === 'tool' ? 2 : 3);
-        staleCount = repairedNormalized.filter(item => !item.verified).length;
+        normalized = parsed.map((item, index) => normalizeItem(item, index, pillar, freshnessDays));
+        verified = await verifySourceItems(normalized, pillar, freshnessDays);
+        items = diversifyItems(verified.filter(item => item.verified), 6, pillar === 'news' || pillar === 'tool' ? 2 : 3);
+        staleCount = verified.filter(item => !item.verified).length;
       }
     }
 
@@ -264,6 +420,7 @@ export async function POST(request) {
       since,
       freshnessDays,
       rejected: staleCount,
+      sourceChecked: true,
       cached: false,
       searchCalls: usedQueries.size
     };

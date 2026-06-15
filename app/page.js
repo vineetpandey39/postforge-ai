@@ -161,7 +161,7 @@ export default function PostForge() {
       setLastRefresh(data.refreshedAt || new Date().toISOString());
       setFreshnessDays(data.freshnessDays || activeWindow);
       setRejected(data.rejected || 0);
-      setStatus(`Loaded ${data.items.length} verified source${data.items.length === 1 ? '' : 's'} from the last ${data.freshnessDays || activeWindow} days. ${data.cached ? 'Used cached research.' : `Paid search calls: ${data.searchCalls || 'n/a'}.`}`);
+      setStatus(`Loaded ${data.items.length} source-checked verified item${data.items.length === 1 ? '' : 's'} from the last ${data.freshnessDays || activeWindow} days. ${data.cached ? 'Used cached research.' : `Paid search calls: ${data.searchCalls || 'n/a'}.`}`);
     } catch (error) {
       setItems(prev => ({ ...prev, [pillar.id]: [] }));
       setStatus(`Refresh failed: ${error.message}`);
