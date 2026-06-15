@@ -35,6 +35,31 @@ Add your keys in `.env.local`.
 - `CANVA_ACCESS_TOKEN` - required for the Canva editable-design route.
 - `CANVA_BRAND_TEMPLATE_ID` - single Canva brand template fallback.
 - `CANVA_TEMPLATE_POOL` - preferred; JSON list of Canva brand templates to rotate through.
+- Optional: `POSTFORGE_REFRESH_SEARCH_BUDGET` - default: `3` for News/Tools, `1` for the other pillars. Controls OpenAI web-search calls per refresh.
+- Optional: `POSTFORGE_REFRESH_FALLBACK_SEARCH_BUDGET` - default: `2`. Extra web-search calls only if the first pass finds too few verified sources.
+- Optional: `POSTFORGE_REFRESH_CACHE_MINUTES` - default: `45`. Reuses verified source results during the cache window to avoid paying again for the same refresh.
+
+## OpenAI cost controls
+
+The expensive path is source refresh, not normal caption text. A News refresh previously fanned out across one broad market search plus seven targeted company searches. With OpenAI web search billing, repeated clicks or autonomous queue retries can become costly quickly.
+
+Recommended Vercel values:
+
+```bash
+POSTFORGE_REFRESH_SEARCH_BUDGET=3
+POSTFORGE_REFRESH_FALLBACK_SEARCH_BUDGET=2
+POSTFORGE_REFRESH_CACHE_MINUTES=45
+```
+
+For a stricter economy mode:
+
+```bash
+POSTFORGE_REFRESH_SEARCH_BUDGET=2
+POSTFORGE_REFRESH_FALLBACK_SEARCH_BUDGET=1
+POSTFORGE_REFRESH_CACHE_MINUTES=120
+```
+
+Keep image generation quality at the current default unless cost becomes the priority over visual consistency.
 
 ## Canva editable backup
 

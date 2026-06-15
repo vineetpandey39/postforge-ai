@@ -33,6 +33,9 @@ const TARGETED_QUERIES = {
   ]
 };
 
+const refreshCache = globalThis.__postforgeRefreshCache || new Map();
+globalThis.__postforgeRefreshCache = refreshCache;
+
 const COMPANY_ALIASES = [
   ['anthropic', ['anthropic', 'claude']],
   ['openai', ['openai', 'chatgpt', 'codex']],
@@ -47,6 +50,61 @@ const COMPANY_ALIASES = [
   ['elevenlabs', ['elevenlabs', 'eleven labs']],
   ['stability', ['stability ai', 'stable diffusion']]
 ];
+
+function intEnv(name, fallback) {
+  const parsed = Number.parseInt(process.env[name] || '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function daySeed(today) {
+  return Math.floor((Date.parse(today) || Date.now()) / 86400000);
+}
+
+function rotate(values, offset) {
+  if (!values.length) return [];
+  return values.map((_, index) => values[(index + offset) % values.length]);
+}
+
+function queryBudgetFor(pillar) {
+  const fallback = pillar === 'news' || pillar === 'tool' ? 3 : 1;
+  return intEnv('POSTFORGE_REFRESH_SEARCH_BUDGET', fallback);
+}
+
+function fallbackBudgetFor() {
+  return intEnv('POSTFORGE_REFRESH_FALLBACK_SEARCH_BUDGET', 2);
+}
+
+function selectQueries(pillar, today, usedQueries = new Set(), extra = false) {
+  const primary = QUERIES[pillar] || QUERIES.news;
+  const targeted = TARGETED_QUERIES[pillar] || [];
+  const budget = extra ? fallbackBudgetFor() : queryBudgetFor(pillar);
+  const rotated = rotate(targeted, daySeed(today) % Math.max(targeted.length, 1));
+  const candidates = extra ? rotated : [primary, ...rotated];
+  return candidates.filter(query => !usedQueries.has(query)).slice(0, budget);
+}
+
+function cacheKey({ pillar, since, today }) {
+  return `${pillar}:${since}:${today}`;
+}
+
+function getCachedRefresh(key) {
+  const cacheMinutes = intEnv('POSTFORGE_REFRESH_CACHE_MINUTES', 45);
+  const cached = refreshCache.get(key);
+  if (!cached) return null;
+  if (Date.now() - cached.createdAt > cacheMinutes * 60000) {
+    refreshCache.delete(key);
+    return null;
+  }
+  return cached.payload;
+}
+
+function setCachedRefresh(key, payload) {
+  refreshCache.set(key, { createdAt: Date.now(), payload });
+  if (refreshCache.size > 40) {
+    const oldestKey = refreshCache.keys().next().value;
+    refreshCache.delete(oldestKey);
+  }
+}
 
 function companyKey(item) {
   const haystack = `${item.company || ''} ${item.source || ''} ${item.headline || ''} ${item.summary || ''}`.toLowerCase();
@@ -152,7 +210,7 @@ async function fetchCandidates({ openaiKey, query, pillarFull, since, today, lim
 
 export async function POST(request) {
   try {
-    const { pillar = 'news', pillarFull = 'AI Content' } = await request.json();
+    const { pillar = 'news', pillarFull = 'AI Content', force = false } = await request.json();
     const openaiKey = process.env.OPENAI_API_KEY;
     if (!openaiKey) return jsonResponse({ error: 'OPENAI_API_KEY is not configured.' }, 500);
 
@@ -160,20 +218,53 @@ export async function POST(request) {
     const today = now.toISOString().slice(0, 10);
     const freshnessDays = PILLAR_FRESHNESS_DAYS[pillar] || FRESHNESS_DAYS;
     const since = new Date(now.getTime() - freshnessDays * 86400000).toISOString().slice(0, 10);
-    const queries = [QUERIES[pillar] || QUERIES.news, ...(TARGETED_QUERIES[pillar] || [])];
-    const candidateGroups = await Promise.all(
-      queries.map(query => fetchCandidates({ openaiKey, query, pillarFull, since, today, limit: pillar === 'news' || pillar === 'tool' ? 3 : 8 }).catch(() => []))
+    const key = cacheKey({ pillar, since, today });
+    const cached = force ? null : getCachedRefresh(key);
+    if (cached) {
+      return jsonResponse({ ...cached, cached: true });
+    }
+
+    const usedQueries = new Set();
+    const queries = selectQueries(pillar, today, usedQueries);
+    queries.forEach(query => usedQueries.add(query));
+    let candidateGroups = await Promise.all(
+      queries.map(query => fetchCandidates({ openaiKey, query, pillarFull, since, today, limit: pillar === 'news' || pillar === 'tool' ? 4 : 8 }).catch(() => []))
     );
-    const parsed = uniqueItems(candidateGroups.flat());
+    let parsed = uniqueItems(candidateGroups.flat());
     const normalized = parsed.map((item, index) => normalizeItem(item, index, pillar, freshnessDays));
-    const items = diversifyItems(normalized.filter(item => item.verified), 6, pillar === 'news' || pillar === 'tool' ? 2 : 3);
-    const staleCount = normalized.filter(item => !item.verified).length;
+    let items = diversifyItems(normalized.filter(item => item.verified), 6, pillar === 'news' || pillar === 'tool' ? 2 : 3);
+    let staleCount = normalized.filter(item => !item.verified).length;
+
+    if (items.length < 3) {
+      const fallbackQueries = selectQueries(pillar, today, usedQueries, true);
+      fallbackQueries.forEach(query => usedQueries.add(query));
+      if (fallbackQueries.length) {
+        const fallbackGroups = await Promise.all(
+          fallbackQueries.map(query => fetchCandidates({ openaiKey, query, pillarFull, since, today, limit: 4 }).catch(() => []))
+        );
+        candidateGroups = [...candidateGroups, ...fallbackGroups];
+        parsed = uniqueItems(candidateGroups.flat());
+        const repairedNormalized = parsed.map((item, index) => normalizeItem(item, index, pillar, freshnessDays));
+        items = diversifyItems(repairedNormalized.filter(item => item.verified), 6, pillar === 'news' || pillar === 'tool' ? 2 : 3);
+        staleCount = repairedNormalized.filter(item => !item.verified).length;
+      }
+    }
 
     if (!items.length) {
       return jsonResponse({ error: `No verified items from the last ${freshnessDays} days found. ${staleCount ? `${staleCount} stale or unverified result(s) were rejected.` : 'Try another pillar or refresh later.'}` }, 404);
     }
 
-    return jsonResponse({ items, refreshedAt: new Date().toISOString(), since, freshnessDays, rejected: staleCount });
+    const payload = {
+      items,
+      refreshedAt: new Date().toISOString(),
+      since,
+      freshnessDays,
+      rejected: staleCount,
+      cached: false,
+      searchCalls: usedQueries.size
+    };
+    setCachedRefresh(key, payload);
+    return jsonResponse(payload);
   } catch (error) {
     return jsonResponse({ error: error.message }, 500);
   }
