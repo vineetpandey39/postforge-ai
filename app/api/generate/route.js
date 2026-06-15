@@ -1,3 +1,4 @@
+import { requirePostforgeAccess } from '../../lib/access';
 import { extractJson, jsonResponse, requireVerifiedItems } from '../../lib/validation';
 
 export const maxDuration = 120;
@@ -159,6 +160,9 @@ async function repairJson({ apiKey, model, rawText, schema }) {
 
 export async function POST(request) {
   try {
+    const blocked = requirePostforgeAccess(request);
+    if (blocked) return blocked;
+
     const { selectedItems, pillarFull, pillarId = 'news', format = 'Carousel' } = await request.json();
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return jsonResponse({ error: 'ANTHROPIC_API_KEY is not configured.' }, 500);

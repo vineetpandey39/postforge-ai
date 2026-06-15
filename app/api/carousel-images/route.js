@@ -1,4 +1,5 @@
 import { put } from '@vercel/blob';
+import { requirePostforgeAccess } from '../../lib/access';
 import { jsonResponse } from '../../lib/validation';
 
 export const maxDuration = 300;
@@ -152,6 +153,9 @@ async function uploadImage(dataUrl, index) {
 
 export async function POST(request) {
   try {
+    const blocked = requirePostforgeAccess(request);
+    if (blocked) return blocked;
+
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return jsonResponse({ error: 'OPENAI_API_KEY is not configured.' }, 500);
 

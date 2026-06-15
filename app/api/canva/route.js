@@ -1,3 +1,4 @@
+import { requirePostforgeAccess } from '../../lib/access';
 import { jsonResponse } from '../../lib/validation';
 
 export const maxDuration = 120;
@@ -106,6 +107,9 @@ async function canvaFetch(path, { method = 'GET', token, body } = {}) {
 
 export async function POST(request) {
   try {
+    const blocked = requirePostforgeAccess(request);
+    if (blocked) return blocked;
+
     const accessToken = clean(process.env.CANVA_ACCESS_TOKEN);
     const body = await request.json();
     const templatePool = parseTemplatePool();

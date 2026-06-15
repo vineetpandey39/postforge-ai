@@ -1,3 +1,4 @@
+import { requirePostforgeAccess } from '../../lib/access';
 import { jsonResponse } from '../../lib/validation';
 
 export const maxDuration = 60;
@@ -104,6 +105,9 @@ function makeSvg({ index, role, headline, subline, stat, body, source, pillarId 
 
 export async function POST(request) {
   try {
+    const blocked = requirePostforgeAccess(request);
+    if (blocked) return blocked;
+
     const { hook, cover_text, cover_subtext, slides = [], pillarId = 'news' } = await request.json();
     if (!Array.isArray(slides) || !slides.length) return jsonResponse({ error: 'Carousel slides are required.' }, 400);
 

@@ -1,3 +1,4 @@
+import { requirePostforgeAccess } from '../../lib/access';
 import { jsonResponse } from '../../lib/validation';
 
 export const maxDuration = 120;
@@ -79,6 +80,9 @@ async function waitForContainer(baseUrl, containerId, accessToken, label) {
 
 export async function POST(request) {
   try {
+    const blocked = requirePostforgeAccess(request);
+    if (blocked) return blocked;
+
     const accessToken = cleanEnvValue(process.env.INSTAGRAM_ACCESS_TOKEN);
     const igUserId = cleanEnvValue(process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID || process.env.INSTAGRAM_USER_ID);
 

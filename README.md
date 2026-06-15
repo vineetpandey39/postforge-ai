@@ -27,6 +27,7 @@ Add your keys in `.env.local`.
 - `OPENAI_API_KEY` - required for refresh and image generation.
 - `ANTHROPIC_API_KEY` - required for post generation.
 - Optional: `ANTHROPIC_MODEL` - default: `claude-sonnet-4-6`.
+- Strongly recommended: `POSTFORGE_API_SECRET` - shared secret required for server-to-server calls from ANDY. Use the exact same value in the ANDY Vercel project.
 - `BLOB_READ_WRITE_TOKEN` - required to upload generated carousel images to public URLs for Instagram posting.
 - `INSTAGRAM_ACCESS_TOKEN` - required for Instagram Graph API publishing.
 - `INSTAGRAM_BUSINESS_ACCOUNT_ID` - required Instagram professional account ID.
@@ -43,9 +44,12 @@ Add your keys in `.env.local`.
 
 The expensive path is source refresh, not normal caption text. A News refresh previously fanned out across one broad market search plus seven targeted company searches. With OpenAI web search billing, repeated clicks or autonomous queue retries can become costly quickly.
 
+Set `POSTFORGE_API_SECRET` in Vercel to block unauthenticated server-to-server calls to expensive PostForge APIs. PostForge's own frontend can still call same-origin APIs, while ANDY must send the same secret through `x-postforge-secret`.
+
 Recommended Vercel values:
 
 ```bash
+POSTFORGE_API_SECRET=your-long-random-shared-secret
 POSTFORGE_REFRESH_SEARCH_BUDGET=3
 POSTFORGE_REFRESH_FALLBACK_SEARCH_BUDGET=2
 POSTFORGE_REFRESH_CACHE_MINUTES=45

@@ -1,3 +1,4 @@
+import { requirePostforgeAccess } from '../../lib/access';
 import { extractJson, FRESHNESS_DAYS, PILLAR_FRESHNESS_DAYS, jsonResponse, normalizeItem } from '../../lib/validation';
 
 export const maxDuration = 120;
@@ -210,6 +211,9 @@ async function fetchCandidates({ openaiKey, query, pillarFull, since, today, lim
 
 export async function POST(request) {
   try {
+    const blocked = requirePostforgeAccess(request);
+    if (blocked) return blocked;
+
     const { pillar = 'news', pillarFull = 'AI Content', force = false } = await request.json();
     const openaiKey = process.env.OPENAI_API_KEY;
     if (!openaiKey) return jsonResponse({ error: 'OPENAI_API_KEY is not configured.' }, 500);
