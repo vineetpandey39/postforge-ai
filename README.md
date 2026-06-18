@@ -6,6 +6,7 @@ A safer Instagram content generator for @aibyvineet.
 
 - Removed fabricated hardcoded AI news seed data.
 - Refresh now returns only source-backed items with URL + date + source.
+- Fresh News/Tools candidates are fetched again from their source URL and rejected when the page is undated, stale, inaccessible, or does not support the generated headline and summary.
 - Generate API refuses unverified items.
 - Claude model name moved to a valid configurable default.
 - Better JSON extraction and validation.
